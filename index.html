@@ -508,7 +508,8 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
     </div>
     <div id="cloudIn" hidden>
       <div class="crow"><span class="hint">Вошёл как <b id="cloudWho"></b></span><button class="btn small ghost" id="cloudLogout" type="button">Выйти</button></div>
-      <div class="crow"><input id="cloudSyncPass" type="password" placeholder="Пароль (для шифрования, тот же что при входе)" autocomplete="current-password"></div>
+      <div class="hint">🔒 Этим паролем данные <b>шифруются</b> при выгрузке в облако и <b>расшифровываются</b> при загрузке на другом компе. Выгружать и забирать нужно <b>одним и тем же</b> паролем. Удобнее всего писать тот же, что при входе — тогда пароль один. Важно: забудешь его — копию из облака уже не расшифровать.</div>
+      <div class="crow"><input id="cloudSyncPass" type="password" placeholder="Пароль для шифрования (как при входе)" autocomplete="current-password"></div>
       <div class="row"><button class="btn primary" id="cloudPush" type="button">⬆ Выгрузить в облако</button><button class="btn" id="cloudPull" type="button">⬇ Забрать из облака</button></div>
       <div class="hint" id="cloudSyncMsg"></div>
       <label class="crow cloud-auto"><input type="checkbox" id="cloudAuto"> <span>Автовыгрузка — сама заливает изменения в облако (примерно раз в 2 минуты)</span></label>
