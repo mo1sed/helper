@@ -1,49 +1,70 @@
 name: release
 
-# Publishes a GitHub Release whenever a tag like v3.7 is pushed.
-# Builds the Windows app (WebView2 window helper + main exe) on a Linux runner
-# via Go cross-compilation, then attaches the raw .exe (used by the in-app
-# auto-updater) and a .zip (for manual download).
+# On every push to main, read the app version from main.go. If no GitHub Release
+# exists for that version yet, build the Windows app and publish a Release
+# (tag v<version>) with the raw .exe (used by the in-app auto-updater) and a .zip.
+# The tag and release are created by the Actions runner's GITHUB_TOKEN.
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  windows-release:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Read version from main.go
+        id: ver
+        run: echo "ver=$(grep -oP 'appVersion = \"\K[0-9.]+' main.go)" >> "$GITHUB_OUTPUT"
+
+      - name: Check if release already exists
+        id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.ver.outputs.ver }}" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=no" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Go
+        if: steps.exists.outputs.exists == 'no'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
       - name: Build WebView2 window helper (embedded into main exe)
+        if: steps.exists.outputs.exists == 'no'
         run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o vdhwindow.exe ./winwindow
 
       - name: Build main app
+        if: steps.exists.outputs.exists == 'no'
         run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "ViceDollsHelper.exe" .
 
       - name: Package zip
+        if: steps.exists.outputs.exists == 'no'
         run: |
-          VER="${GITHUB_REF_NAME#v}"
+          VER="${{ steps.ver.outputs.ver }}"
           mkdir -p dist
           cp "ViceDollsHelper.exe" "dist/Vice Dolls Helper.exe"
           (cd dist && zip -j "Vice Dolls Helper ${VER}.zip" "Vice Dolls Helper.exe")
           ls -la dist
 
-      - name: Create / update Release
+      - name: Publish Release
+        if: steps.exists.outputs.exists == 'no'
         uses: softprops/action-gh-release@v2
         with:
-          name: Vice Dolls Helper ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
+          name: Vice Dolls Helper v${{ steps.ver.outputs.ver }}
+          tag_name: v${{ steps.ver.outputs.ver }}
+          target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
           files: |
             ViceDollsHelper.exe
