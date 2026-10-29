@@ -1,0 +1,7 @@
+# build artifacts
+*.exe
+*.zip
+/dist/
+vdhwindow.exe
+mac-app/vd-amd64
+mac-app/vd-arm64

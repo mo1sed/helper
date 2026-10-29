@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Vice Dolls Helper</string>
+  <key>CFBundleDisplayName</key><string>Vice Dolls Helper</string>
+  <key>CFBundleIdentifier</key><string>com.vicedolls.helper.app</string>
+  <key>CFBundleVersion</key><string>3.0</string>
+  <key>CFBundleShortVersionString</key><string>3.0</string>
+  <key>CFBundleExecutable</key><string>VDHApp</string>
+  <key>CFBundleIconFile</key><string>icon</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>LSMinimumSystemVersion</key><string>11.3</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppTransportSecurity</key>
+  <dict><key>NSAllowsLocalNetworking</key><true/></dict>
+</dict>
+</plist>

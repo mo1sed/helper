@@ -1,0 +1,50 @@
+name: release
+
+# Publishes a GitHub Release whenever a tag like v3.7 is pushed.
+# Builds the Windows app (WebView2 window helper + main exe) on a Linux runner
+# via Go cross-compilation, then attaches the raw .exe (used by the in-app
+# auto-updater) and a .zip (for manual download).
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build WebView2 window helper (embedded into main exe)
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o vdhwindow.exe ./winwindow
+
+      - name: Build main app
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "ViceDollsHelper.exe" .
+
+      - name: Package zip
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          cp "ViceDollsHelper.exe" "dist/Vice Dolls Helper.exe"
+          (cd dist && zip -j "Vice Dolls Helper ${VER}.zip" "Vice Dolls Helper.exe")
+          ls -la dist
+
+      - name: Create / update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Vice Dolls Helper ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          fail_on_unmatched_files: true
+          files: |
+            ViceDollsHelper.exe
+            dist/*.zip
