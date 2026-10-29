@@ -58,6 +58,14 @@ jobs:
           (cd dist && zip -j "Vice Dolls Helper ${VER}.zip" "Vice Dolls Helper.exe")
           ls -la dist
 
+      - name: Extract release notes from CHANGELOG
+        if: steps.exists.outputs.exists == 'no'
+        run: |
+          VER="${{ steps.ver.outputs.ver }}"
+          awk -v v="## v${VER}" 'f && /^## /{exit} $0==v{f=1;next} f{print}' CHANGELOG.md > RELEASE_NOTES.md || true
+          if [ ! -s RELEASE_NOTES.md ]; then echo "Обновление v${VER}" > RELEASE_NOTES.md; fi
+          echo "---- notes ----"; cat RELEASE_NOTES.md
+
       - name: Publish Release
         if: steps.exists.outputs.exists == 'no'
         uses: softprops/action-gh-release@v2
@@ -65,6 +73,7 @@ jobs:
           name: Vice Dolls Helper v${{ steps.ver.outputs.ver }}
           tag_name: v${{ steps.ver.outputs.ver }}
           target_commitish: ${{ github.sha }}
+          body_path: RELEASE_NOTES.md
           fail_on_unmatched_files: true
           files: |
             ViceDollsHelper.exe

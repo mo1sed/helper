@@ -27,7 +27,7 @@ var page []byte
 const addr = "127.0.0.1:47615"
 
 // appVersion is shown in the app; marker lets an update check it got a real build of this app.
-const appVersion = "3.7"
+const appVersion = "3.8"
 const marker = "VDH-APP-BUILD-MARKER-7f3a91"
 const url = "http://" + addr + "/"
 
