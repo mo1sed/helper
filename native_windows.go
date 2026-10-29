@@ -435,6 +435,9 @@ func showPasteMenu(onlyFolder, onlySub string) {
 		if onlyFolder != "" && f.ID != onlyFolder {
 			continue
 		}
+		if onlyFolder == "" && f.QpHidden { // hidden from the full Ctrl menu (still usable in-app and via its own hotkey)
+			continue
+		}
 		var inF []msg
 		for _, m := range msgs {
 			if m.Folder == f.ID {

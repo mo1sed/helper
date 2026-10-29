@@ -27,7 +27,7 @@ var page []byte
 const addr = "127.0.0.1:47615"
 
 // appVersion is shown in the app; marker lets an update check it got a real build of this app.
-const appVersion = "3.8"
+const appVersion = "3.9"
 const marker = "VDH-APP-BUILD-MARKER-7f3a91"
 const url = "http://" + addr + "/"
 
@@ -136,10 +136,11 @@ type msg struct {
 	Hot       bool     `json:"hot"`
 }
 type folder struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Hotkey string `json:"hotkey"`
-	Subs   []struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Hotkey   string `json:"hotkey"`
+	QpHidden bool   `json:"qpHidden"` // hide this folder from the full Ctrl quick-paste menu
+	Subs     []struct {
 		ID     string `json:"id"`
 		Name   string `json:"name"`
 		Hotkey string `json:"hotkey"`
