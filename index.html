@@ -325,16 +325,13 @@ body.is-dragging,body.is-dragging *{cursor:grabbing!important}
 .sh-sum .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .sh-sum .v{font-family:var(--f-mono);font-size:18px;font-variant-numeric:tabular-nums}
 .sh-sum .main .v{font-family:var(--f-display);font-size:28px;font-weight:700;color:var(--accent)}
-.sh-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.sh-add #shModel{min-width:170px;width:auto}
-.sh-add #shAmt{flex:1;min-width:150px;width:auto}
-.sh-list{display:flex;flex-direction:column;gap:6px}
-.sh-item{display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
-.sh-item .sh-m{flex:1;min-width:0;font-weight:600;word-break:break-word}
-.sh-item .sh-a{font-family:var(--f-mono);font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
-.sh-item .sh-t{font-size:12px;color:var(--muted);font-family:var(--f-mono)}
-.sh-by{display:flex;flex-wrap:wrap;gap:6px}
-.sh-chip{font-size:13px;background:var(--surface-2);border-radius:8px;padding:4px 10px;font-family:var(--f-mono)}
+.sh-when{font:inherit;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-family:var(--f-mono)}
+.sh-pick{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sh-pick #shPickSel{min-width:200px;width:auto;flex:1}
+.sh-cards{display:flex;flex-direction:column;gap:8px}
+.sh-card{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.sh-card .sh-cn{flex:1;min-width:0;font-weight:600;word-break:break-word}
+.sh-card .sh-ci{width:160px;font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
 .sh-foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px}
 select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
 .search{max-width:260px}
@@ -439,19 +436,18 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
 
   <section class="shift" id="viewShift" hidden>
     <div class="sh-top">
-      <div><div class="sh-date" id="shDate">Сегодня</div><div class="hint" id="shHint">Набивай продажи за смену — одной кнопкой уйдут в «Зарплату» с датой.</div></div>
-      <div class="sh-sum"><div><span class="k">Продаж</span><span class="v" id="shCount">0</span></div><div class="main"><span class="k">Сумма за смену</span><span class="v" id="shTotal">0,00 $</span></div></div>
+      <div><div class="sh-date" id="shDate">Смена</div><div class="hint" id="shHint">Отметь модели, на которых работаешь, впиши заработок по каждой и закрой смену — суммы уйдут в «Зарплату» на выбранную дату.</div></div>
+      <div class="sh-sum"><div><span class="k">Дата смены</span><input type="date" id="shWhen" class="sh-when" aria-label="Дата смены"></div><div class="main"><span class="k">Итого за смену</span><span class="v" id="shTotal">0,00 $</span></div></div>
     </div>
-    <form class="sh-add" id="shAdd">
-      <select id="shModel" aria-label="Модель"></select>
-      <input id="shAmt" inputmode="decimal" placeholder="+ сумма продажи, Enter" aria-label="Сумма продажи">
-      <button class="btn primary small" type="submit">Добавить</button>
-    </form>
-    <div class="sh-list" id="shList"></div>
-    <div class="sh-by" id="shBy"></div>
+    <div class="sh-pick">
+      <select id="shPickSel" aria-label="Добавить модель на смену"></select>
+      <button class="btn primary small" id="shPickAdd" type="button">+ На смену</button>
+      <button class="btn small ghost" id="shPickAll" type="button">Все модели</button>
+    </div>
+    <div class="sh-cards" id="shCards"></div>
     <div class="sh-foot">
-      <button class="btn primary" id="shSave" type="button">Записать в зарплату</button>
-      <button class="btn ghost small" id="shClear" type="button">Очистить смену</button>
+      <button class="btn primary" id="shSave" type="button">Закрыть смену → в зарплату</button>
+      <button class="btn ghost small" id="shClear" type="button">Сбросить смену</button>
     </div>
   </section>
 
@@ -1123,11 +1119,12 @@ $("prDelModel").onclick=()=>{const b=$("prDelModel");if(!b.dataset.sure){b.datas
   const p=prData();p.models=p.models.filter(m=>m.id!==prSel);prSel="general";prEditing=null;prSave();renderPrice()};
 
 /* Shift handlers */
-$("shAdd").onsubmit=e=>{e.preventDefault();addShiftSale()};
-$("shAmt").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();addShiftSale()}};
+$("shPickAdd").onclick=()=>{const sh=shiftNorm();const id=$("shPickSel").value;if(!id)return;if(!sh.picked.includes(id))sh.picked.push(id);S.store.setShift(sh);renderShift()};
+$("shPickAll").onclick=()=>{const sh=shiftNorm();for(const m of monthView(salMonth).models)if(!sh.picked.includes(m.id))sh.picked.push(m.id);S.store.setShift(sh);renderShift()};
+$("shWhen").onchange=()=>{const sh=shiftNorm();sh.date=$("shWhen").value||null;S.store.setShift(sh)};
 $("shSave").onclick=shiftToSalary;
-$("shClear").onclick=()=>{const b=$("shClear");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Точно очистить?";setTimeout(()=>{delete b.dataset.sure;b.textContent="Очистить смену"},3000);return}
-  S.shift={entries:[]};S.store.setShift(S.shift);renderShift();toast("Смена очищена")};
+$("shClear").onclick=()=>{const b=$("shClear");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Точно сбросить?";setTimeout(()=>{delete b.dataset.sure;b.textContent="Сбросить смену"},3000);return}
+  S.shift={picked:[],sums:{},date:null};S.store.setShift(S.shift);$("shWhen").value=todayISO();renderShift();toast("Смена сброшена")};
 
 /* ---------- translator ---------- */
 const TR_LANGS=[["auto","Определить язык"],["ru","Русский"],["en","Английский"],["uk","Украинский"],["es","Испанский"],["de","Немецкий"],["fr","Французский"],["it","Итальянский"],["pl","Польский"],["pt","Португальский"],["tr","Турецкий"],["ar","Арабский"],["nl","Нидерландский"],["cs","Чешский"],["ro","Румынский"]];
@@ -1367,57 +1364,67 @@ function renderPrice(){
   $("prAdd").style.display=cur.editable?"":"none";
 }
 
-/* ---------- Shift tracker (logs sales, pushes into salary) ---------- */
+/* ---------- Shift: pick today's models, enter each one's earnings, close → salary ---------- */
 function shiftSeedModels(s,k){const months=s.months||{};const prev=Object.keys(months).filter(x=>x<k).sort().pop();
   return prev?months[prev].models.map(m=>({id:m.id,name:m.name,percent:m.percent,amounts:[]})):[]}
-function addShiftSale(){
-  const sel=$("shModel"),ai=$("shAmt");
-  if(sel.disabled){toast("Сначала добавь модель во вкладке «Зарплата»");return}
-  const vals=parseAmounts(ai.value);if(!vals.length){if(ai.value.trim())toast("Не вижу числа");return}
-  const models=monthView(salMonth).models;const md=models.find(m=>m.id===sel.value)||models[0];if(!md)return;
-  S.shift=S.shift||{entries:[]};S.shift.entries=S.shift.entries||[];
-  for(const v of vals)S.shift.entries.push({id:"e"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),modelId:md.id,name:md.name,amount:v,ts:Date.now()});
-  S.store.setShift(S.shift);ai.value="";ai.focus();renderShift();
-  if(vals.length>1)toast("Добавлено продаж: "+vals.length);
+function shiftNorm(){
+  S.shift=S.shift||{};
+  if(Array.isArray(S.shift.entries)){ // migrate old per-sale format → per-model sums
+    const picked=[],sums={};
+    for(const e of S.shift.entries){if(e.modelId){if(!picked.includes(e.modelId))picked.push(e.modelId);sums[e.modelId]=(sums[e.modelId]||0)+(+e.amount||0)}}
+    S.shift={picked,sums,date:S.shift.date||null};
+  }
+  S.shift.picked=Array.isArray(S.shift.picked)?S.shift.picked:[];
+  S.shift.sums=S.shift.sums||{};
+  return S.shift;
 }
+function shiftTotals(){const sh=shiftNorm();let t=0;for(const id of sh.picked)t+=(+sh.sums[id]||0);
+  $("shTotal").textContent=money(t);$("shSave").disabled=!sh.picked.some(id=>(+sh.sums[id]||0)>0);}
 function shiftToSalary(){
-  const es=(S.shift&&S.shift.entries)||[];if(!es.length){toast("Смена пустая");return}
+  const sh=shiftNorm();
+  const iso=$("shWhen").value||todayISO(),mk=iso.slice(0,7);
+  const picked=sh.picked.filter(id=>(+sh.sums[id]||0)>0);
+  if(!picked.length){toast("Впиши заработок хотя бы по одной модели");return}
   const s=JSON.parse(JSON.stringify(S.salary||{months:{}}));s.months=s.months||{};
-  for(const e of es){
-    const iso=new Date(e.ts).toISOString().slice(0,10),mk=iso.slice(0,7);
-    if(!s.months[mk])s.months[mk]={models:shiftSeedModels(s,mk)};
-    let md=s.months[mk].models.find(m=>m.id===e.modelId);
-    if(!md){md={id:e.modelId||("m"+Date.now().toString(36)),name:e.name||"Модель",percent:20,amounts:[]};s.months[mk].models.push(md)}
-    md.amounts=md.amounts||[];md.amounts.push({v:e.amount,d:iso});
+  if(!s.months[mk])s.months[mk]={models:shiftSeedModels(s,mk)};
+  const nameById=new Map((monthView(salMonth).models||[]).map(m=>[m.id,m]));
+  for(const id of picked){
+    let md=s.months[mk].models.find(m=>m.id===id);
+    if(!md){const src=nameById.get(id);md={id,name:src?src.name:"Модель",percent:src?src.percent:20,amounts:[]};s.months[mk].models.push(md)}
+    md.amounts=md.amounts||[];md.amounts.push({v:+sh.sums[id],d:iso});
   }
   S.salary=s;S.store.setSalary(s);
-  S.shift={entries:[]};S.store.setShift(S.shift);
+  S.shift={picked:[],sums:{},date:null};S.store.setShift(S.shift);
+  $("shWhen").value=todayISO();
   renderShift();if(!$("viewSal").hidden)renderSalary();
-  toast("Записано в зарплату: "+es.length+" продаж");
+  toast("Смена закрыта — записано моделей: "+picked.length);
 }
 function renderShift(){
-  S.shift=S.shift||{entries:[]};S.shift.entries=S.shift.entries||[];
-  const es=S.shift.entries;
-  $("shDate").textContent="Смена · "+dmyFull(todayISO());
-  const sel=$("shModel"),prevVal=sel.value,models=monthView(salMonth).models;sel.textContent="";
-  if(!models.length){const o=document.createElement("option");o.value="";o.textContent="Сначала добавь модель в «Зарплата»";sel.appendChild(o);sel.disabled=true}
-  else{sel.disabled=false;for(const m of models){const o=document.createElement("option");o.value=m.id;o.textContent=m.name;sel.appendChild(o)}
-    if([...sel.options].some(o=>o.value===prevVal))sel.value=prevVal}
-  const total=es.reduce((a,e)=>a+(+e.amount||0),0);
-  $("shCount").textContent=es.length;$("shTotal").textContent=money(total);
-  const box=$("shList");box.textContent="";
-  if(!es.length){const d=document.createElement("div");d.className="emptyl";d.textContent="Пока нет продаж. Выбери модель, впиши сумму и жми Enter.";box.appendChild(d)}
-  es.forEach((e,i)=>{const row=document.createElement("div");row.className="sh-item";
-    row.innerHTML='<span class="sh-m"></span><span class="sh-a"></span><span class="sh-t"></span><button class="btn small ghost danger" type="button" title="Удалить">✕</button>';
-    row.querySelector(".sh-m").textContent=e.name||"—";
-    row.querySelector(".sh-a").textContent=money(e.amount);
-    row.querySelector(".sh-t").textContent=new Date(e.ts).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
-    row.querySelector("button").onclick=()=>{es.splice(i,1);S.store.setShift(S.shift);renderShift()};
-    box.appendChild(row)});
-  const by=$("shBy");by.textContent="";
-  const map=new Map();for(const e of es){const k=e.name||"—";map.set(k,(map.get(k)||0)+(+e.amount||0))}
-  if(map.size>1)for(const [k,v] of map){const c=document.createElement("span");c.className="sh-chip";c.textContent=k+": "+money(v);by.appendChild(c)}
-  $("shSave").disabled=!es.length;
+  const sh=shiftNorm();
+  const models=monthView(salMonth).models;const byId=new Map(models.map(m=>[m.id,m]));
+  $("shDate").textContent="Смена";
+  if(!$("shWhen").value)$("shWhen").value=sh.date||todayISO();
+  // picker: models not yet on shift
+  const sel=$("shPickSel");sel.textContent="";const avail=models.filter(m=>!sh.picked.includes(m.id));
+  if(!models.length){const o=document.createElement("option");o.value="";o.textContent="Сначала добавь модель в «Зарплата»";sel.appendChild(o);sel.disabled=true;$("shPickAdd").disabled=true;$("shPickAll").disabled=true}
+  else{sel.disabled=false;$("shPickAdd").disabled=!avail.length;$("shPickAll").disabled=!avail.length;
+    if(!avail.length){const o=document.createElement("option");o.value="";o.textContent="Все модели уже на смене";sel.appendChild(o)}
+    else for(const m of avail){const o=document.createElement("option");o.value=m.id;o.textContent=m.name;sel.appendChild(o)}}
+  // cards: one per picked model with an earnings input
+  const box=$("shCards");box.textContent="";
+  if(!sh.picked.length){const d=document.createElement("div");d.className="emptyl";d.textContent="Добавь модель на смену сверху, впиши её заработок, потом «Закрыть смену».";box.appendChild(d)}
+  for(const id of sh.picked){
+    const md=byId.get(id);const name=md?md.name:"Модель (удалена)";const sum=+sh.sums[id]||0;
+    const c=document.createElement("div");c.className="sh-card";
+    c.innerHTML='<span class="sh-cn"></span><input class="sh-ci" inputmode="decimal" placeholder="заработок, $"><button class="btn small ghost danger" type="button" title="Убрать со смены">✕</button>';
+    c.querySelector(".sh-cn").textContent=name;
+    const inp=c.querySelector(".sh-ci");inp.value=sum?String(sum).replace(".",","):"";
+    inp.onchange=()=>{const v=parseFloat((inp.value||"").replace(",","."))||0;sh.sums[id]=v;S.store.setShift(sh);shiftTotals()};
+    inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();inp.blur()}};
+    c.querySelector("button").onclick=()=>{sh.picked=sh.picked.filter(x=>x!==id);delete sh.sums[id];S.store.setShift(sh);renderShift()};
+    box.appendChild(c);
+  }
+  shiftTotals();
 }
 
 function render(){
