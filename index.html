@@ -1729,7 +1729,7 @@ function cloudShowOut(){$("cloudAuth").hidden=false;$("cloudIn").hidden=true;clo
 
 /* --- the login gate (must sign in to use the app) --- */
 function gateUnlock(){$("authGate").hidden=true}
-function gateLock(){$("authGate").hidden=false;$("gMsg").textContent="";try{const e=localStorage.getItem("vdh-cloud-email");if(e&&!$("gEmail").value)$("gEmail").value=e}catch(_){}}
+function gateLock(){$("authGate").hidden=false;$("gMsg").textContent="";$("gSkip").hidden=false;try{const e=localStorage.getItem("vdh-cloud-email");if(e&&!$("gEmail").value)$("gEmail").value=e}catch(_){}}
 (async function authInit(){
   let cfg;try{cfg=await (await fetch("/api/cloud")).json()}catch(e){cfg={configured:false}}
   if(!cfg||!cfg.configured){gateUnlock();return} // no cloud configured → no gate
