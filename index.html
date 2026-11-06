@@ -614,7 +614,16 @@ function localStore(){
       save()},
     dump(){return JSON.parse(JSON.stringify(data))},
     load(d,merge){if(merge){const ids=new Set(data.messages.map(m=>m.id));for(const m of d.messages||[])if(!ids.has(m.id))data.messages.push(m);if(d.folders){const f=data.folders||DEFAULT_FOLDERS.slice();for(const x of d.folders)if(!f.find(y=>y.id===x.id))f.push(x);data.folders=f}
-      if(d.salary&&d.salary.months){const s=data.salary||{months:{}};s.months=s.months||{};for(const k in d.salary.months)if(!s.months[k])s.months[k]=d.salary.months[k];data.salary=s}
+      if(d.salary&&d.salary.months){const s=data.salary||{months:{}};s.months=s.months||{};
+        for(const k in d.salary.months){const im=d.salary.months[k]||{},lm=s.months[k];
+          if(!lm||!lm.models||!lm.models.length){s.months[k]=im;continue}
+          for(const imd of im.models||[]){
+            const md=lm.models.find(x=>x.id===imd.id)||lm.models.find(x=>x.name&&x.name===imd.name);
+            if(!md){lm.models.push(imd);continue}
+            md.amounts=md.amounts||[];const have=new Set(md.amounts.map(a=>JSON.stringify(a)));
+            for(const a of imd.amounts||[])if(!have.has(JSON.stringify(a))){md.amounts.push(a);have.add(JSON.stringify(a))}}}
+        if(d.salary.avatars){s.avatars=s.avatars||{};for(const id in d.salary.avatars)if(!s.avatars[id])s.avatars[id]=d.salary.avatars[id]}
+        data.salary=s}
       if(d.prices&&!data.prices)data.prices=d.prices;if(d.shift&&!data.shift)data.shift=d.shift}else data={folders:d.folders||null,messages:d.messages||[]};save()}};
 }
 function setStatus(t){$("status").textContent=t}
