@@ -1923,6 +1923,22 @@ async function cloudAuth(path,body){let r;
   catch(e){const err=new Error("нет сети");err.network=true;throw err}
   const d=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(d.msg||d.error_description||d.error||d.message||("ошибка "+r.status));return d}
+/* The access token lives ~1 hour: refresh it by itself (on 401 and every 40 min) */
+let cloudRefreshing=null;
+function cloudRefreshToken(){
+  if(!cloudRefresh)return Promise.resolve(false);
+  if(cloudRefreshing)return cloudRefreshing;
+  cloudRefreshing=(async()=>{try{const d=await cloudAuth("token?grant_type=refresh_token",{refresh_token:cloudRefresh});
+    if(!d.access_token)return false;cloudTok=d.access_token;cloudRefresh=d.refresh_token||cloudRefresh;saveSession();return true}
+    catch(_){return false}finally{setTimeout(()=>{cloudRefreshing=null},0)}})();
+  return cloudRefreshing}
+async function authedFetch(url,opts){
+  opts=opts||{};const extra=opts.headers||{};
+  const go=()=>fetch(url,{...opts,headers:{...supaHeaders(true),...extra}});
+  let r=await go();
+  if(r.status===401&&cloudRefresh){if(await cloudRefreshToken())r=await go();else{const e=new Error("сессия истекла — выйди из облака и войди заново");throw e}}
+  return r}
+setInterval(()=>{if(cloudTok&&cloudRefresh)cloudRefreshToken()},40*60*1000);
 /* The login password is remembered on this computer (next to the data file itself) so that nothing has to be typed again:
    it is also the key that encrypts the cloud copy. */
 const pwEnc=p=>{try{return btoa(unescape(encodeURIComponent(p||"")))}catch(_){return ""}};
@@ -1995,7 +2011,7 @@ async function cloudFirstSync(){
   try{if(!cloudTok||!cloudPass)return;const d=S.store.dump();
     const hasSal=d.salary&&Object.values(d.salary.months||{}).some(m=>(m.models||[]).length);
     if(countMsgs(d)>0||hasSal||(d.prices&&((d.prices.general||[]).length||(d.prices.models||[]).length)))return;
-    const r=await fetch("/api/supa/rest/v1/backups?select=blob,updated_at&limit=1",{headers:supaHeaders(true)});
+    const r=await authedFetch("/api/supa/rest/v1/backups?select=blob,updated_at&limit=1");
     if(!r.ok)return;const rows=await r.json();if(!rows||!rows.length)return;
     const obj=await decBlob(rows[0].blob,cloudPass);if(countMsgs(obj)===0)return;
     S.store.load(obj,false);toast("Из облака вернулись твои данные");cloudLastSig=cloudSig();
@@ -2006,7 +2022,7 @@ const countMsgs=o=>{let n=(o&&o.messages||[]).length;for(const k in (o&&o.profil
 let cloudForceUntil=0;
 /* never overwrite a better cloud copy by accident: wrong encryption password, or a (nearly) empty local library */
 async function cloudGuard(pass){
-  try{const r=await fetch("/api/supa/rest/v1/backups?select=blob&limit=1",{headers:supaHeaders(true)});
+  try{const r=await authedFetch("/api/supa/rest/v1/backups?select=blob&limit=1");
     if(!r.ok)return null;const rows=await r.json();if(!rows||!rows.length)return null;
     let obj;try{obj=await decBlob(rows[0].blob,pass)}catch(_){cloudAskOldPass();return "В облаке лежит копия, зашифрованная ДРУГИМ паролем. Если выгрузить, старая копия пропадёт. Впиши прежний пароль в поле ниже."}
     const c=countMsgs(obj),l=countMsgs(S.store.dump());
@@ -2024,7 +2040,7 @@ async function cloudPushNow(pass,silent){
         return false}}
     cloudForceUntil=0;
     const blob=await encBlob(S.store.dump(),pass);
-    const r=await fetch("/api/supa/rest/v1/backups?on_conflict=user_id",{method:"POST",headers:{...supaHeaders(true),Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify([{blob,updated_at:new Date().toISOString()}])});
+    const r=await authedFetch("/api/supa/rest/v1/backups?on_conflict=user_id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify([{blob,updated_at:new Date().toISOString()}])});
     if(!r.ok)throw new Error("ошибка "+r.status+" "+(await r.text()));
     cloudPassAccepted(pass);cloudLastSig=cloudSig();try{localStorage.setItem("vdh-cloud-lastpush",Date.now())}catch(_){}
     cloudShowLast();
@@ -2050,7 +2066,7 @@ $("cloudPull").onclick=async()=>{const pass=effPass();if(!pass){$("cloudSyncMsg"
     setTimeout(()=>{if(pb.dataset.sure){pb.textContent=pb.dataset.orig;delete pb.dataset.sure}},5000);return}
   delete pb.dataset.sure;pb.textContent=pb.dataset.orig||"Забрать";
   $("cloudSyncMsg").textContent="Забираю…";
-  try{const r=await fetch("/api/supa/rest/v1/backups?select=blob,updated_at&limit=1",{headers:supaHeaders(true)});
+  try{const r=await authedFetch("/api/supa/rest/v1/backups?select=blob,updated_at&limit=1");
     if(!r.ok)throw new Error("ошибка "+r.status);const rows=await r.json();
     if(!rows||!rows.length){$("cloudSyncMsg").textContent="В облаке пока пусто — сначала выгрузи.";return}
     const obj=await decBlob(rows[0].blob,pass);S.store.load(obj,false);cloudPassAccepted(pass);
