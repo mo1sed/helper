@@ -135,8 +135,25 @@ func buildHistory(list []ghRel, current string) []relNote {
 	return out
 }
 
-// releaseHistory fetches the recent releases; any failure just means "no history" (the latest notes still show).
-func releaseHistory(current string) []relNote {
+// buildAll lists every published release, newest first (the full history shown in the "Обновления" window).
+func buildAll(list []ghRel) []relNote {
+	var out []relNote
+	for _, r := range list {
+		if r.Draft || r.Prerelease || r.TagName == "" {
+			continue
+		}
+		d := r.PublishedAt
+		if len(d) >= 10 {
+			d = d[:10]
+		}
+		out = append(out, relNote{Version: strings.TrimPrefix(strings.TrimSpace(r.TagName), "v"), Notes: strings.TrimSpace(r.Body), Date: d})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return verNewer(out[i].Version, out[j].Version) })
+	return out
+}
+
+// fetchReleases gets the recent releases; any failure just means "no history" (the latest notes still show).
+func fetchReleases() []ghRel {
 	req, _ := http.NewRequest("GET", "https://api.github.com/repos/"+ghOwner+"/"+ghRepo+"/releases?per_page=50", nil)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "ViceDollsHelper")
@@ -152,7 +169,7 @@ func releaseHistory(current string) []relNote {
 	if json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&list) != nil {
 		return nil
 	}
-	return buildHistory(list, current)
+	return list
 }
 
 func handleLatest(w http.ResponseWriter, r *http.Request) {
@@ -163,13 +180,12 @@ func handleLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newer := verNewer(ver, appVersion)
-	var history []relNote
-	if newer {
-		history = releaseHistory(appVersion)
-	}
+	list := fetchReleases()
+	history := buildHistory(list, appVersion) // only what is newer than this install (start-up notification)
+	all := buildAll(list)                     // the whole history ("Обновления" window)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"ok": true, "version": strings.TrimPrefix(strings.TrimSpace(ver), "v"),
-		"current": appVersion, "newer": newer, "url": assetURL, "notes": notes, "history": history,
+		"current": appVersion, "newer": newer, "url": assetURL, "notes": notes, "history": history, "all": all,
 	})
 }
 

@@ -78,3 +78,21 @@ jobs:
           files: |
             ViceDollsHelper.exe
             dist/*.zip
+
+      # CHANGELOG.md is the single source of truth: keep the notes of EVERY existing release in sync with it,
+      # so older releases can be corrected too (the in-app "Обновления" window reads these notes).
+      - name: Sync release notes from CHANGELOG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          grep -oP '^## v\K[0-9.]+' CHANGELOG.md | while read -r v; do
+            awk -v v="## v${v}" 'f && /^## /{exit} $0==v{f=1;next} f{print}' CHANGELOG.md | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > /tmp/notes.md
+            [ -s /tmp/notes.md ] || continue
+            rel=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v${v}" 2>/dev/null) || continue
+            id=$(echo "$rel" | jq -r .id)
+            cur=$(echo "$rel" | jq -r '.body // ""' | tr -d '\r')
+            if [ "$cur" != "$(cat /tmp/notes.md)" ]; then
+              echo "updating notes of v${v}"
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F body=@/tmp/notes.md >/dev/null
+            fi
+          done

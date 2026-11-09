@@ -111,6 +111,9 @@ h1 span{color:var(--accent)}
 .upd-ver:first-child{margin-top:0}
 .upd-ver small{font-weight:400;color:var(--muted);margin-left:6px}
 .upd-vn{white-space:pre-wrap}
+.upd-ver .tag{font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;margin-left:8px;background:var(--accent,#ff4f93);color:var(--accent-fg,#fff)}
+.upd-ver.cur .tag{background:rgba(80,200,110,.18);color:#8fe39a}
+.upd-ver.old,.upd-vn.old{opacity:.72}
 .qp-show{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;margin-right:4px}
 .qp-show input{cursor:pointer}
 .folder.qpauto .fname::after{content:" ↻";opacity:.8}
@@ -1826,10 +1829,19 @@ function fillNotes(el,d){el.textContent="";
       const n=document.createElement("div");n.className="upd-vn";n.textContent=fmtNotes(h.notes);el.append(v,n)}return true}
   const t=fmtNotes(d&&d.notes);if(!t)return false;
   const n=document.createElement("div");n.className="upd-vn";n.textContent=t;el.appendChild(n);return true}
+const verNumJS=v=>String(v).replace(/^v/,"").split(".").map(x=>parseInt(x,10)||0);
+const verNewerJS=(a,b)=>{const x=verNumJS(a),y=verNumJS(b);for(let i=0;i<Math.max(x.length,y.length);i++){const p=x[i]||0,q=y[i]||0;if(p!==q)return p>q}return false};
+/* whole history, newest first: new versions highlighted, the installed one marked, older ones dimmed */
+function fillAll(el,d){el.textContent="";const all=Array.isArray(d.all)?d.all.filter(h=>h&&h.notes):[];if(!all.length)return false;
+  for(const h of all){const isNew=verNewerJS(h.version,d.current),isCur=h.version===d.current;
+    const v=document.createElement("div");v.className="upd-ver"+(isCur?" cur":"")+(!isNew&&!isCur?" old":"");v.textContent="v"+h.version;
+    if(h.date){const sm=document.createElement("small");sm.textContent=h.date.split("-").reverse().join(".");v.appendChild(sm)}
+    if(isNew||isCur){const tg=document.createElement("span");tg.className="tag";tg.textContent=isNew?"новое":"у тебя сейчас";v.appendChild(tg)}
+    const n=document.createElement("div");n.className="upd-vn"+(!isNew&&!isCur?" old":"");n.textContent=fmtNotes(h.notes);el.append(v,n)}
+  return true}
 function updRenderNotes(d){const w=$("updNotesWrap");if(!d){w.hidden=true;$("updNotes").textContent="";return}
-  const many=d.newer&&Array.isArray(d.history)&&d.history.length>1;
-  $("updNotesHint").textContent=d.newer?(many?"Что нового с твоей версии (v"+d.current+"):":"Что нового:"):"Что нового в этой версии:";
-  w.hidden=!fillNotes($("updNotes"),d)}
+  $("updNotesHint").textContent=d.newer?"Что нового (новые версии подсвечены):":"История обновлений:";
+  w.hidden=!(fillAll($("updNotes"),d)||fillNotes($("updNotes"),d))}
 async function checkUpdates(){
   const st=$("updStatus"),doBtn=$("updDoBtn");
   st.className="upd-status";st.textContent="Проверяю обновления…";doBtn.hidden=true;updRenderNotes(null);
