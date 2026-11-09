@@ -294,6 +294,8 @@ section.lib{margin-top:28px;display:flex;flex-direction:column;gap:14px}
 .handle:hover{background:var(--surface-2);color:var(--fg)}
 .list.nodrag .handle{visibility:hidden}
 body.is-dragging,body.is-dragging *{cursor:grabbing!important}
+body.is-dragging .chip-x{display:none}
+.subbar .chip[data-id]{touch-action:none;user-select:none}
 .item .txt{white-space:pre-wrap;word-break:break-word;min-width:0}
 .item .when{grid-column:2/-1;font-size:12px;color:var(--muted);font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .item .ops{display:flex;gap:4px;align-self:start}
@@ -661,7 +663,9 @@ function localStore(){
     dump(){return JSON.parse(JSON.stringify(data))},
     load(d,merge){
       if(!merge){ // replace everything (cloud pull): keep ALL fields — salary, prices, shift, avatars, profiles
-        data={...d,folders:d.folders||null,messages:d.messages||[]};save();return 0}
+        // a copy made before profiles existed only replaces the active profile; the other local profiles stay
+        const keep=(!d.profiles&&data.profiles&&data.profiles.length>1)?{profiles:data.profiles,activeProfile:data.activeProfile,profileData:data.profileData}:{};
+        data={...d,...keep,folders:d.folders||null,messages:d.messages||[]};save();return 0}
       const mergeLib=(t,sr)=>{let n=0;t.messages=t.messages||[];const ids=new Set(t.messages.map(m=>m.id));
         for(const m of sr.messages||[])if(m&&!ids.has(m.id)){t.messages.push(m);ids.add(m.id);n++}
         if(sr.folders){const f=(t.folders||DEFAULT_FOLDERS.slice()).slice();for(const x of sr.folders)if(!f.find(y=>y.id===x.id))f.push(x);t.folders=f}
@@ -712,8 +716,10 @@ function renderSubs(cf,sb){
     const b=document.createElement("button");b.type="button";b.className="chip"+(x.id===sb?" on":"");
     b.innerHTML='<span></span> <span class="fhk" hidden></span> <span class="n"></span>';b.firstChild.textContent=x.name;b.lastChild.textContent=n;
     if(x.hotkey){const k=b.querySelector(".fhk");k.hidden=false;k.textContent=x.hotkey}
-    b.onclick=()=>{S.sub[cf.id]=x.id;S.shown=null;S.editing=null;hkEditing=false;hkPick=undefined;render();showOut()};
+    b.dataset.id=x.id;b.title="Нажми — открыть, зажми и перетащи — поменять порядок";
+    b.onclick=()=>{if(b.dataset.dragged)return;S.sub[cf.id]=x.id;S.shown=null;S.editing=null;hkEditing=false;hkPick=undefined;render();showOut()};
     bar.appendChild(b);
+    if(subs.length>1)makeSortable(b,b,bar,".chip[data-id]",ids=>reorderSubs(cf.id,ids),{grid:true});
     if(x.id===sb){const d=document.createElement("button");d.type="button";d.className="chip-x";d.title="Удалить категорию";d.textContent="×";
       d.onclick=async()=>{if(n){toast("Сначала удали сообщения из «"+x.name+"»");return}
         if(!d.dataset.sure){d.dataset.sure=1;d.textContent="удалить?";setTimeout(()=>{d.textContent="×";delete d.dataset.sure},2500);return}
@@ -730,6 +736,20 @@ function renderSubs(cf,sb){
     bar.appendChild(f);setTimeout(()=>{const i=$("newSub");if(i)i.focus()},0);
   }else{const a=document.createElement("button");a.type="button";a.className="chip add";a.textContent=subs.length?"+ Категория":"+ Разбить на категории";
     a.onclick=()=>{S.addingSub=true;render()};bar.appendChild(a)}
+}
+
+/* new order of a folder's sub-categories (drag & drop). Messages that have no valid sub-category count as the FIRST one,
+   so they are pinned to it before the order changes — otherwise they would jump to another category. */
+async function reorderSubs(fid,ids){
+  const f=S.folders.find(x=>x.id===fid);if(!f||!f.subs)return;
+  const known=new Set(f.subs.map(x=>x.id)),first=f.subs[0].id;
+  const pin=S.messages.filter(m=>m.folder===fid&&!known.has(m.sub)).map(m=>[m.id,{sub:first}]);
+  if(pin.length)await S.store.updateMany(pin);
+  const g=S.folders.find(x=>x.id===fid);if(!g||!g.subs)return;
+  const by=new Map(g.subs.map(x=>[x.id,x])),next=ids.map(id=>by.get(id)).filter(Boolean);
+  for(const x of g.subs)if(!next.includes(x))next.push(x);
+  if(next.every((x,i)=>x===g.subs[i]))return;
+  g.subs=next;await S.store.setFolders(S.folders);toast("Порядок категорий сохранён");
 }
 
 /* ---------- hotkeys (bound to a folder, or to a sub-category) ---------- */
