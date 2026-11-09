@@ -219,6 +219,11 @@ nav{display:flex;flex-direction:column;gap:4px;position:sticky;top:calc(env(safe
 .folder.on{background:var(--accent);color:var(--accent-fg)}
 .frename{flex:1;min-width:0;padding:3px 6px;font-size:14px;border-radius:6px}
 .folder .fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.fedit{all:unset;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:6px;display:none;opacity:.75;color:inherit}
+.fedit:hover{opacity:1;background:color-mix(in srgb,currentColor 18%,transparent)}
+.fedit:focus-visible{outline:2px solid currentColor}
+.folder:hover .fedit,.folder:focus-within .fedit{display:inline}
+.folder:hover .n,.folder:focus-within .n{display:none}
 .fdel{all:unset;cursor:pointer;font-size:11px;padding:2px 6px;border-radius:6px;opacity:0;color:inherit;white-space:nowrap}
 .folder:hover .fdel,.folder:focus-within .fdel,.folder.confirm .fdel{opacity:.75}
 .fdel:hover{opacity:1!important;background:color-mix(in srgb,var(--danger) 25%,transparent)}
@@ -598,7 +603,7 @@ function normalizeFolders(list){
   const out=(list&&list.length?list:DEFAULT_FOLDERS).map(f=>({...f}));
   for(const d of DEFAULT_FOLDERS){const f=out.find(x=>x.id===d.id);
     if(!f)continue; // deleted by the user
-    if(LEGACY_NAMES[f.name])f.name=LEGACY_NAMES[f.name];if(d.subs&&!(f.subs&&f.subs.length))f.subs=d.subs.map(x=>({...x}))}
+    if(!f.renamed&&LEGACY_NAMES[f.name])f.name=LEGACY_NAMES[f.name];if(d.subs&&!(f.subs&&f.subs.length))f.subs=d.subs.map(x=>({...x}))}
   return out;
 }
 const curFolder=()=>S.folders.find(f=>f.id===S.cur)||{};
@@ -647,7 +652,7 @@ function localStore(){
     async switchProfile(id){doSwitch(id)},
     async addProfile(name,copyFolders){const l=pList().slice(),id="p"+Date.now().toString(36);l.push({id,name});data.profiles=l;
       data.profileData=data.profileData||{};
-      const fl=copyFolders?(data.folders||DEFAULT_FOLDERS).map(f=>({id:f.id,name:f.name,...(f.qpHidden?{qpHidden:true}:{}),...(f.qpAuto?{qpAuto:true}:{}),
+      const fl=copyFolders?(data.folders||DEFAULT_FOLDERS).map(f=>({id:f.id,name:f.name,...(f.qpHidden?{qpHidden:true}:{}),...(f.qpAuto?{qpAuto:true}:{}),...(f.renamed?{renamed:true}:{}),
         ...(f.subs&&f.subs.length?{subs:f.subs.map(x=>({id:x.id,name:x.name}))}:{})})):null;
       data.profileData[id]={folders:fl,messages:[]};doSwitch(id);return id},
     async renameProfile(id,name){data.profiles=pList().map(p=>p.id===id?{...p,name}:p);save()},
@@ -720,7 +725,15 @@ function renderSubs(cf,sb){
     b.onclick=()=>{if(b.dataset.dragged)return;S.sub[cf.id]=x.id;S.shown=null;S.editing=null;hkEditing=false;hkPick=undefined;render();showOut()};
     bar.appendChild(b);
     if(subs.length>1)makeSortable(b,b,bar,".chip[data-id]",ids=>reorderSubs(cf.id,ids),{grid:true});
-    if(x.id===sb){const d=document.createElement("button");d.type="button";d.className="chip-x";d.title="Удалить категорию";d.textContent="×";
+    if(x.id===sb){const ed=document.createElement("button");ed.type="button";ed.className="chip-x";ed.title="Переименовать категорию";ed.textContent="✎";
+      ed.onclick=()=>{const inp=document.createElement("input");inp.type="text";inp.className="frename";inp.value=x.name;inp.maxLength=30;inp.style.width="150px";
+        b.replaceWith(inp);ed.remove();inp.focus();inp.select();let fin=false;
+        const done=async ok=>{if(fin)return;fin=true;const v=inp.value.trim();
+          if(ok&&v&&v!==x.name){const g=S.folders.find(y=>y.id===cf.id);if(g&&g.subs){g.subs=g.subs.map(y=>y.id===x.id?{...y,name:v}:y);await S.store.setFolders(S.folders);toast("Категория переименована");return}}
+          render()};
+        inp.onkeydown=e=>{if(e.key==="Enter")done(true);else if(e.key==="Escape")done(false)};inp.onblur=()=>done(true)};
+      bar.appendChild(ed);
+      const d=document.createElement("button");d.type="button";d.className="chip-x";d.title="Удалить категорию";d.textContent="×";
       d.onclick=async()=>{if(n){toast("Сначала удали сообщения из «"+x.name+"»");return}
         if(!d.dataset.sure){d.dataset.sure=1;d.textContent="удалить?";setTimeout(()=>{d.textContent="×";delete d.dataset.sure},2500);return}
         cf.subs=subs.filter(y=>y.id!==x.id);delete S.sub[cf.id];hkPick=undefined;await S.store.setFolders(S.folders)};
@@ -1533,21 +1546,22 @@ function render(){
   for(const f of S.folders){
     const b=document.createElement("div");b.className="folder"+(f.id===S.cur?" on":"");b.tabIndex=0;b.setAttribute("role","button");b.dataset.id=f.id;
     const n=S.messages.filter(m=>m.folder===f.id).length;
-    b.innerHTML='<span class="fname"></span><span class="fhk" hidden></span><span class="n"></span><button class="fdel" type="button" title="Удалить папку">✕</button>';
+    b.innerHTML='<span class="fname"></span><span class="fhk" hidden></span><span class="n"></span><button class="fedit" type="button" title="Переименовать папку">✎</button><button class="fdel" type="button" title="Удалить папку">✕</button>';
     b.querySelector(".fname").textContent=f.name;b.querySelector(".n").textContent=n;
     if(f.qpHidden){b.classList.add("qphidden");b.title="Скрыта из Ctrl-меню"}
     else if(f.qpAuto){b.classList.add("qpauto");b.title="Автовставка в Ctrl-меню"}
     if(f.hotkey){const k=b.querySelector(".fhk");k.hidden=false;k.textContent=f.hotkey}
     const open=()=>{if(S.cur===f.id)return;S.cur=f.id;S.shown=null;S.addingSub=false;S.editing=null;hkEditing=false;render();showOut();try{localStorage.setItem("onlyk-cur",f.id)}catch(e){}};
-    b.onclick=e=>{if(e.target.closest(".fdel")||b.dataset.dragged)return;open()};
+    b.onclick=e=>{if(e.target.closest(".fdel,.fedit")||b.dataset.dragged)return;open()};
     b.onkeydown=e=>{if(e.target!==b)return;if(e.key==="Enter"||e.key===" "){e.preventDefault();open()}else if(e.key==="F2"){e.preventDefault();b._rename()}};
     b._rename=()=>{const sp=b.querySelector(".fname");const inp=document.createElement("input");inp.className="frename";inp.id="fr-"+f.id;inp.value=f.name;inp.maxLength=40;
       sp.replaceWith(inp);inp.focus();inp.select();let done=false;
       const fin=async ok=>{if(done)return;done=true;const v=inp.value.trim();
-        if(ok&&v&&v!==f.name){await S.store.setFolders(S.folders.map(x=>x.id===f.id?{...x,name:v}:x));toast("Папка переименована")}else render()};
+        if(ok&&v&&v!==f.name){await S.store.setFolders(S.folders.map(x=>x.id===f.id?{...x,name:v,renamed:true}:x));toast("Папка переименована")}else render()};
       inp.onkeydown=e=>{e.stopPropagation();if(e.key==="Enter")fin(true);else if(e.key==="Escape")fin(false)};
       inp.onblur=()=>fin(true);inp.onclick=e=>e.stopPropagation();inp.onpointerdown=e=>e.stopPropagation()};
-    b.title="Двойной клик — переименовать";
+    b.title=(b.title?b.title+" · ":"")+"двойной клик или ✎ — переименовать";
+    const ed=b.querySelector(".fedit");ed.onclick=e=>{e.stopPropagation();b._rename()};ed.onpointerdown=e=>e.stopPropagation();
     const del=b.querySelector(".fdel");
     del.onclick=async e=>{e.stopPropagation();
       if(S.folders.length<2){toast("Нельзя удалить последнюю папку");return}
