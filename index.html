@@ -106,7 +106,11 @@ h1 span{color:var(--accent)}
 .upd-status.ok{color:#8fe39a;border-color:rgba(80,200,110,.35);background:rgba(80,200,110,.08)}
 .upd-status.new{color:#ffd27a;border-color:rgba(255,190,70,.4);background:rgba(255,190,70,.1)}
 .upd-status.warn{color:#ff9a9a;border-color:rgba(255,90,90,.35);background:rgba(255,90,90,.08)}
-.upd-notes{margin-top:6px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:13.5px;line-height:1.5;white-space:pre-wrap;max-height:220px;overflow:auto}
+.upd-notes{margin-top:6px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:13.5px;line-height:1.5;max-height:340px;overflow:auto}
+.upd-ver{font-weight:700;margin:14px 0 4px;color:var(--accent,#ff4f93)}
+.upd-ver:first-child{margin-top:0}
+.upd-ver small{font-weight:400;color:var(--muted);margin-left:6px}
+.upd-vn{white-space:pre-wrap}
 .qp-show{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;margin-right:4px}
 .qp-show input{cursor:pointer}
 .folder.qpauto .fname::after{content:" ↻";opacity:.8}
@@ -551,12 +555,23 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
   </div>
 </div>
 
+<div class="modal" id="updPrompt" hidden role="dialog" aria-modal="true" aria-labelledby="updpTitle">
+  <div class="mbox" style="width:min(580px,100%)">
+    <div class="mhd"><h2 id="updpTitle">🔔 Вышла новая версия</h2></div>
+    <div class="upd-row"><span class="hint">У тебя:</span> <b id="updpCur"></b> &nbsp;→&nbsp; <span class="hint">новая:</span> <b id="updpNew"></b></div>
+    <div class="hint" id="updpHint">Что появится после обновления:</div>
+    <div class="upd-notes" id="updpNotes"></div>
+    <div class="row" style="margin-top:10px"><button class="btn primary" id="updpDo" type="button">⬆ Обновить сейчас</button><button class="btn" id="updpLater" type="button">Позже</button></div>
+    <div class="hint">Твои данные при обновлении сохраняются. Программа перезапустится сама.</div>
+  </div>
+</div>
+
 <div class="modal" id="updModal" hidden role="dialog" aria-modal="true" aria-labelledby="updTitle">
   <div class="mbox">
     <div class="mhd"><h2 id="updTitle">⟳ Обновления</h2><button class="btn small ghost" id="updClose" type="button">Закрыть</button></div>
     <div class="upd-row"><span class="hint">Текущая версия:</span> <b id="updCur">—</b></div>
     <div class="upd-status" id="updStatus">Проверяю обновления…</div>
-    <div id="updNotesWrap" hidden><div class="hint" style="margin-top:8px">Что нового:</div><div class="upd-notes" id="updNotes"></div></div>
+    <div id="updNotesWrap" hidden><div class="hint" style="margin-top:8px" id="updNotesHint">Что нового:</div><div class="upd-notes" id="updNotes"></div></div>
     <div class="row" style="margin-top:14px">
       <button class="btn primary" id="updDoBtn" type="button" hidden></button>
       <button class="btn" id="updRecheck" type="button">Проверить снова</button>
@@ -1801,38 +1816,65 @@ addEventListener("focus",ping);
 fetch("/api/version").then(r=>r.json()).then(d=>{const v=document.createElement("span");v.className="ver";v.textContent="v"+d.version;$("brand").appendChild(v);}).catch(()=>{});
 /* ---- Обновления: проверка релизов GitHub, показ статуса/изменений, обновление в один клик ---- */
 let updLatest=null;
-function updRenderNotes(txt){const w=$("updNotesWrap"),n=$("updNotes");txt=(txt||"").trim();if(!txt){w.hidden=true;n.textContent="";return}n.textContent=txt;w.hidden=false;}
+/* release notes -> readable text: "- item" becomes a bullet, markdown ** and ` are dropped */
+const fmtNotes=t=>String(t||"").replace(/\r/g,"").replace(/\*\*/g,"").replace(/`/g,"").split("\n").map(l=>l.replace(/^\s*[-*]\s+/,"• ")).join("\n").trim();
+/* several versions behind: one block per version, newest first; otherwise just the notes text */
+function fillNotes(el,d){el.textContent="";
+  const hist=d&&d.newer&&Array.isArray(d.history)?d.history.filter(h=>h&&h.notes):[];
+  if(hist.length){for(const h of hist){const v=document.createElement("div");v.className="upd-ver";v.textContent="v"+h.version;
+      if(h.date){const sm=document.createElement("small");sm.textContent=h.date.split("-").reverse().join(".");v.appendChild(sm)}
+      const n=document.createElement("div");n.className="upd-vn";n.textContent=fmtNotes(h.notes);el.append(v,n)}return true}
+  const t=fmtNotes(d&&d.notes);if(!t)return false;
+  const n=document.createElement("div");n.className="upd-vn";n.textContent=t;el.appendChild(n);return true}
+function updRenderNotes(d){const w=$("updNotesWrap");if(!d){w.hidden=true;$("updNotes").textContent="";return}
+  const many=d.newer&&Array.isArray(d.history)&&d.history.length>1;
+  $("updNotesHint").textContent=d.newer?(many?"Что нового с твоей версии (v"+d.current+"):":"Что нового:"):"Что нового в этой версии:";
+  w.hidden=!fillNotes($("updNotes"),d)}
 async function checkUpdates(){
   const st=$("updStatus"),doBtn=$("updDoBtn");
-  st.className="upd-status";st.textContent="Проверяю обновления…";doBtn.hidden=true;updRenderNotes("");
+  st.className="upd-status";st.textContent="Проверяю обновления…";doBtn.hidden=true;updRenderNotes(null);
   try{
     const r=await fetch("/api/latest");const d=await r.json();updLatest=d;
     $("updCur").textContent="v"+(d.current||"?");
     if(!d||!d.ok){st.className="upd-status warn";st.textContent="Не удалось проверить — нет связи с GitHub"+(d&&d.error?" ("+d.error+")":"");return;}
     if(d.newer&&d.url){
       st.className="upd-status new";st.textContent="Доступна новая версия: v"+d.version;
-      updRenderNotes(d.notes);
+      updRenderNotes(d);
       doBtn.hidden=false;doBtn.textContent="⬆ Обновить до v"+d.version;
       $("updCheckBtn").classList.add("primary");
     }else{
       st.className="upd-status ok";st.textContent="У вас последняя версия ✓ (v"+(d.version||d.current)+")";
-      updRenderNotes(d.notes);
+      updRenderNotes(d);
       $("updCheckBtn").classList.remove("primary");
     }
   }catch(e){st.className="upd-status warn";st.textContent="Не удалось проверить — нет связи с интернетом";}
 }
-$("updDoBtn").onclick=async()=>{const d=updLatest;if(!d||!d.url)return;
-  const ov=document.createElement("div");ov.className="overlay";ov.textContent="Скачиваю и ставлю v"+d.version+"…";document.body.appendChild(ov);
+async function doSelfUpdate(d){if(!d||!d.url)return;
+  const ov=document.createElement("div");ov.className="overlay";ov.style.zIndex=300;ov.textContent="Скачиваю и ставлю v"+d.version+"…";document.body.appendChild(ov);
   try{if(window.__flush)window.__flush();
     const r=await fetch("/api/selfupdate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:d.url})});
     if(!r.ok){ov.remove();toast(await r.text()||"Не получилось обновить");return}
     ov.textContent="Готово! Программа перезапускается…";}
-  catch(e){ov.remove();toast("Не получилось обновить")}};
+  catch(e){ov.remove();toast("Не получилось обновить")}}
+$("updDoBtn").onclick=()=>doSelfUpdate(updLatest);
 $("updCheckBtn").onclick=()=>{$("updModal").hidden=false;checkUpdates();};
 $("updRecheck").onclick=checkUpdates;
 $("updClose").onclick=()=>{$("updModal").hidden=true;};
-/* тихая проверка при запуске — подсветить кнопку, если есть обновление */
-setTimeout(()=>{fetch("/api/latest").then(r=>r.json()).then(d=>{updLatest=d;if(d&&d.ok&&d.newer&&d.url){$("updCheckBtn").classList.add("primary");$("updCheckBtn").textContent="⟳ Обновление v"+d.version;toast("Доступно обновление v"+d.version);}}).catch(()=>{});},1500);
+/* notification at start: a newer version exists -> show what it brings, update now or later */
+const updSnoozed=v=>{try{const o=JSON.parse(localStorage.getItem("vdh-upd-snooze")||"{}");return o.v===v&&Date.now()-o.t<6*3600*1000}catch(_){return false}};
+function showUpdPrompt(d){if(!d||!d.newer||!d.url||!$("updModal").hidden)return;
+  $("updpCur").textContent="v"+d.current;$("updpNew").textContent="v"+d.version;
+  const many=Array.isArray(d.history)&&d.history.length>1;
+  $("updpHint").textContent=many?"Что появится после обновления (всё, что вышло с v"+d.current+"):":"Что появится после обновления:";
+  const has=fillNotes($("updpNotes"),d);$("updpNotes").hidden=!has;
+  $("updPrompt").hidden=false}
+$("updpDo").onclick=()=>{$("updPrompt").hidden=true;doSelfUpdate(updLatest)};
+$("updpLater").onclick=()=>{$("updPrompt").hidden=true;try{localStorage.setItem("vdh-upd-snooze",JSON.stringify({v:(updLatest||{}).version,t:Date.now()}))}catch(_){}};
+function whenUnlocked(cb){let n=0;const t=setInterval(()=>{n++;const g=$("authGate");if(!g||g.hidden){clearInterval(t);cb()}else if(n>480)clearInterval(t)},500)}
+/* тихая проверка при запуске — подсветить кнопку и показать уведомление о новой версии */
+setTimeout(()=>{fetch("/api/latest").then(r=>r.json()).then(d=>{updLatest=d;if(d&&d.ok&&d.newer&&d.url){
+  $("updCheckBtn").classList.add("primary");$("updCheckBtn").textContent="⟳ Обновление v"+d.version;
+  if(updSnoozed(d.version))toast("Доступно обновление v"+d.version);else whenUnlocked(()=>showUpdPrompt(d))}}).catch(()=>{});},1500);
 $("updFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
   window.__flush&&window.__flush();
   const ov=document.createElement("div");ov.className="overlay";ov.textContent="Обновляю программу…";document.body.appendChild(ov);

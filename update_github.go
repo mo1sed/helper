@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -101,6 +102,59 @@ func latestRelease() (version, assetURL, notes string, err error) {
 	return ver, pick, d.Body, nil
 }
 
+// relNote is one release's "what is new" text.
+type relNote struct {
+	Version string `json:"version"`
+	Notes   string `json:"notes"`
+	Date    string `json:"date,omitempty"`
+}
+
+type ghRel struct {
+	TagName     string `json:"tag_name"`
+	Body        string `json:"body"`
+	Draft       bool   `json:"draft"`
+	Prerelease  bool   `json:"prerelease"`
+	PublishedAt string `json:"published_at"`
+}
+
+// buildHistory keeps the releases newer than `current`, newest first, so a person on an old version
+// sees everything that changed since their version, not just the last release.
+func buildHistory(list []ghRel, current string) []relNote {
+	var out []relNote
+	for _, r := range list {
+		if r.Draft || r.Prerelease || r.TagName == "" || !verNewer(r.TagName, current) {
+			continue
+		}
+		d := r.PublishedAt
+		if len(d) >= 10 {
+			d = d[:10]
+		}
+		out = append(out, relNote{Version: strings.TrimPrefix(strings.TrimSpace(r.TagName), "v"), Notes: strings.TrimSpace(r.Body), Date: d})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return verNewer(out[i].Version, out[j].Version) })
+	return out
+}
+
+// releaseHistory fetches the recent releases; any failure just means "no history" (the latest notes still show).
+func releaseHistory(current string) []relNote {
+	req, _ := http.NewRequest("GET", "https://api.github.com/repos/"+ghOwner+"/"+ghRepo+"/releases?per_page=50", nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "ViceDollsHelper")
+	resp, err := ghClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil
+	}
+	var list []ghRel
+	if json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&list) != nil {
+		return nil
+	}
+	return buildHistory(list, current)
+}
+
 func handleLatest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	ver, assetURL, notes, err := latestRelease()
@@ -108,9 +162,14 @@ func handleLatest(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": err.Error()})
 		return
 	}
+	newer := verNewer(ver, appVersion)
+	var history []relNote
+	if newer {
+		history = releaseHistory(appVersion)
+	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"ok": true, "version": strings.TrimPrefix(strings.TrimSpace(ver), "v"),
-		"current": appVersion, "newer": verNewer(ver, appVersion), "url": assetURL, "notes": notes,
+		"current": appVersion, "newer": newer, "url": assetURL, "notes": notes, "history": history,
 	})
 }
 
