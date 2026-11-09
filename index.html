@@ -519,7 +519,7 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
 <div class="modal" id="cloudModal" hidden role="dialog" aria-modal="true" aria-labelledby="cloudTitle">
   <div class="mbox">
     <div class="mhd"><h2 id="cloudTitle">☁ Облако и перенос</h2><button class="btn small ghost" id="cloudClose" type="button">Закрыть</button></div>
-    <div class="hint">Залогинься — и сможешь выгрузить все свои папки, сообщения, прайсы и зарплату в облако, а на другом компе (например, Mac) забрать их одним нажатием. Данные шифруются твоим паролем, на сервере — «каша».</div>
+    <div class="hint" id="cloudIntro">Войди — и все твои папки, сообщения, прайсы и зарплата будут сами сохраняться в облако. На другом компьютере войди тем же логином, и данные вернутся.</div>
     <div id="cloudAuth">
       <div class="crow"><input id="cloudEmail" type="text" placeholder="Логин" autocomplete="username"></div>
       <div class="crow"><input id="cloudPass" type="password" placeholder="Пароль" autocomplete="current-password"></div>
@@ -527,11 +527,11 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
     </div>
     <div id="cloudIn" hidden>
       <div class="crow"><span class="hint">Вошёл как <b id="cloudWho"></b></span><button class="btn small ghost" id="cloudLogout" type="button">Выйти</button></div>
-      <div class="hint">🔒 Этим паролем данные <b>шифруются</b> при выгрузке в облако и <b>расшифровываются</b> при загрузке на другом компе. Выгружать и забирать нужно <b>одним и тем же</b> паролем. Удобнее всего писать тот же, что при входе — тогда пароль один. Важно: забудешь его — копию из облака уже не расшифровать.</div>
-      <div class="crow"><input id="cloudSyncPass" type="password" placeholder="Пароль для шифрования (как при входе)" autocomplete="current-password"></div>
-      <div class="row"><button class="btn primary" id="cloudPush" type="button">⬆ Выгрузить в облако</button><button class="btn" id="cloudPull" type="button">⬇ Забрать из облака</button></div>
+      <div class="hint" id="cloudPassHint" hidden>🔒 В облаке лежит копия, зашифрованная другим паролем. Впиши тот пароль, которым выгружал раньше (потом всё будет работать от пароля входа).</div>
+      <div class="crow" id="cloudPassRow" style="display:none"><input id="cloudSyncPass" type="password" placeholder="Прежний пароль шифрования" autocomplete="current-password"></div>
+      <div class="row"><button class="btn primary" id="cloudPush" type="button">⬆ Выгрузить сейчас</button><button class="btn" id="cloudPull" type="button">⬇ Забрать из облака</button></div>
       <div class="hint" id="cloudSyncMsg"></div>
-      <label class="crow cloud-auto"><input type="checkbox" id="cloudAuto"> <span>Автовыгрузка — сама заливает изменения в облако (примерно раз в 2 минуты)</span></label>
+      <label class="crow cloud-auto"><input type="checkbox" id="cloudAuto"> <span>Автосохранение в облако (само, раз в пару минут, если что-то изменилось)</span></label>
       <div class="hint" id="cloudLast"></div>
       <div class="hint">⬆ заливает то, что сейчас на этом компе. ⬇ заменяет данные на этом компе тем, что в облаке (локальная копия перезапишется).</div>
     </div>
@@ -569,7 +569,7 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
   <div class="auth-card">
     <div class="auth-brand"><img class="logo" alt="" src="data:image/png;base64,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"> <span>Vice Dolls <b>Helper</b></span></div>
     <h2 id="authTitle">Вход</h2>
-    <div class="auth-hint">Войди в свой аккаунт, чтобы пользоваться приложением.</div>
+    <div class="auth-hint">Войди один раз — приложение запомнит тебя, само сохранит твои данные в облако, и на новом компьютере их можно будет вернуть тем же логином. Нет аккаунта — придумай логин и пароль и нажми «Регистрация».</div>
     <input id="gEmail" type="text" placeholder="Логин" autocomplete="username">
     <input id="gPass" type="password" placeholder="Пароль" autocomplete="current-password">
     <div class="row"><button class="btn primary" id="gLogin" type="button">Войти</button><button class="btn" id="gSignup" type="button">Регистрация</button></div>
@@ -1869,12 +1869,20 @@ async function cloudAuth(path,body){let r;
   catch(e){const err=new Error("нет сети");err.network=true;throw err}
   const d=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(d.msg||d.error_description||d.error||d.message||("ошибка "+r.status));return d}
-function saveSession(){try{localStorage.setItem("vdh-cloud-session",JSON.stringify({email:cloudUser,refresh_token:cloudRefresh}))}catch(_){}
-  try{localStorage.setItem("vdh-cloud-email",cloudUser)}catch(_){}}
+/* The login password is remembered on this computer (next to the data file itself) so that nothing has to be typed again:
+   it is also the key that encrypts the cloud copy. */
+const pwEnc=p=>{try{return btoa(unescape(encodeURIComponent(p||"")))}catch(_){return ""}};
+const pwDec=p=>{try{return decodeURIComponent(escape(atob(p||"")))}catch(_){return ""}};
+function saveSession(){try{localStorage.setItem("vdh-cloud-session",JSON.stringify({email:cloudUser,refresh_token:cloudRefresh,pw:pwEnc(cloudPass)}))}catch(_){}
+  try{localStorage.setItem("vdh-cloud-email",cloudUser)}catch(_){}
+  cloudUpdateBtn()}
+function cloudUpdateBtn(){const b=$("cloudBtn");if(b)b.textContent=cloudTok?"☁ "+cloudUser:"☁ Облако"}
 function clearSession(){try{localStorage.removeItem("vdh-cloud-session")}catch(_){}}
-const effPass=()=>cloudPass||$("cloudSyncPass").value;
-function cloudShowIn(){$("cloudAuth").hidden=true;$("cloudIn").hidden=false;$("cloudWho").textContent=cloudUser;$("cloudSyncPass").parentElement.style.display=cloudPass?"none":"";if(typeof cloudShowLast==="function")cloudShowLast()}
-function cloudShowOut(){$("cloudAuth").hidden=false;$("cloudIn").hidden=true;cloudTok="";cloudPass="";cloudUser="";cloudRefresh="";$("cloudSyncMsg").textContent=""}
+const effPass=()=>$("cloudSyncPass").value||cloudPass; // the field only appears when an older copy needs its old password
+function cloudPassAccepted(p){cloudPass=p;saveSession();$("cloudSyncPass").value="";$("cloudPassRow").style.display="none";$("cloudPassHint").hidden=true} // remember the password that really opens the cloud copy
+function cloudAskOldPass(){$("cloudPassRow").style.display="";$("cloudPassHint").hidden=false}
+function cloudShowIn(){$("cloudAuth").hidden=true;$("cloudIn").hidden=false;$("cloudWho").textContent=cloudUser;$("cloudPassRow").style.display=cloudPass?"none":"";$("cloudPassHint").hidden=!!cloudPass;if(typeof cloudShowLast==="function")cloudShowLast()}
+function cloudShowOut(){$("cloudAuth").hidden=false;$("cloudIn").hidden=true;cloudTok="";cloudPass="";cloudUser="";cloudRefresh="";$("cloudSyncMsg").textContent="";$("cloudSyncPass").value="";cloudUpdateBtn()}
 
 /* --- the login gate (must sign in to use the app) --- */
 function gateUnlock(){$("authGate").hidden=true}
@@ -1887,9 +1895,13 @@ function gateLock(){$("authGate").hidden=false;$("gMsg").textContent="";$("gSkip
   if(sess&&sess.refresh_token){
     $("gMsg").textContent="Вход…";
     try{const d=await cloudAuth("token?grant_type=refresh_token",{refresh_token:sess.refresh_token});
-      cloudTok=d.access_token;cloudRefresh=d.refresh_token||sess.refresh_token;cloudUser=(d.user&&fromEmail(d.user.email))||sess.email||"";
-      saveSession();gateUnlock();return}
-    catch(e){if(e.network){cloudUser=sess.email||"";gateUnlock();return} // offline but seen before → let in
+      const pw=pwDec(sess.pw);
+      if(!pw){ // signed in by an older version: the password was never kept — ask for it once
+        cloudUser=(d.user&&fromEmail(d.user.email))||sess.email||"";clearSession();
+        gateLock();$("gEmail").value=cloudUser;$("gMsg").textContent="Введи пароль ещё раз — после этого приложение его запомнит.";return}
+      cloudTok=d.access_token;cloudRefresh=d.refresh_token||sess.refresh_token;cloudPass=pw;cloudUser=(d.user&&fromEmail(d.user.email))||sess.email||"";
+      saveSession();gateUnlock();cloudFirstSync();return}
+    catch(e){if(e.network){cloudUser=sess.email||"";cloudPass=pwDec(sess.pw);gateUnlock();return} // offline but seen before → let in
       clearSession()}
   }
   gateLock();
@@ -1900,7 +1912,7 @@ async function gateDoAuth(path){const login=$("gEmail").value.trim(),pass=$("gPa
   try{const d=await cloudAuth(path,{email:toEmail(login),password:pass});
     if(path==="signup"&&!d.access_token){$("gMsg").textContent="Аккаунт создан — теперь нажми «Войти».";return}
     cloudTok=d.access_token;cloudRefresh=d.refresh_token||"";cloudPass=pass;cloudUser=login;
-    saveSession();$("gPass").value="";gateUnlock();toast("Вошёл: "+login)}
+    saveSession();$("gPass").value="";gateUnlock();toast("Вошёл: "+login);cloudFirstSync()}
   catch(e){const msg=e.message||"";$("gMsg").textContent=e.network?"Сервер приложения недоступен":msg;
     if(e.network||/\b50\d\b/.test(msg)){$("gSkip").hidden=false;$("gMsg").textContent=(e.network?"Нет связи с облаком":"Облако недоступно ("+msg+")")+" — можно войти без облака."}}}
 $("gSkip").onclick=()=>{gateUnlock();toast("Запущено без облака — вход в ☁ Облако будет доступен позже")};
@@ -1919,10 +1931,21 @@ async function cloudDoAuth(path){const login=$("cloudEmail").value.trim(),pass=$
   try{const d=await cloudAuth(path,{email:toEmail(login),password:pass});
     if(path==="signup"&&!d.access_token){$("cloudAuthMsg").textContent="Аккаунт создан — теперь «Войти».";return}
     cloudTok=d.access_token;cloudRefresh=d.refresh_token||"";cloudPass=pass;cloudUser=login;
-    saveSession();$("cloudAuthMsg").textContent="";$("cloudPass").value="";cloudShowIn();toast("Вошёл: "+login)}
+    saveSession();$("cloudAuthMsg").textContent="";$("cloudPass").value="";cloudShowIn();toast("Вошёл: "+login);cloudFirstSync()}
   catch(e){$("cloudAuthMsg").textContent=e.network?"Сервер недоступен":e.message}}
 $("cloudLogout").onclick=()=>{clearSession();cloudShowOut();$("cloudModal").hidden=true;gateLock();toast("Вышел")};
 let cloudAutoTimer=null,cloudLastSig=null;
+/* A fresh install (nothing here yet) that logs in to an account with a cloud copy gets that copy automatically.
+   Anything already on this computer is never touched. */
+async function cloudFirstSync(){
+  try{if(!cloudTok||!cloudPass)return;const d=S.store.dump();
+    const hasSal=d.salary&&Object.values(d.salary.months||{}).some(m=>(m.models||[]).length);
+    if(countMsgs(d)>0||hasSal||(d.prices&&((d.prices.general||[]).length||(d.prices.models||[]).length)))return;
+    const r=await fetch("/api/supa/rest/v1/backups?select=blob,updated_at&limit=1",{headers:supaHeaders(true)});
+    if(!r.ok)return;const rows=await r.json();if(!rows||!rows.length)return;
+    const obj=await decBlob(rows[0].blob,cloudPass);if(countMsgs(obj)===0)return;
+    S.store.load(obj,false);toast("Из облака вернулись твои данные");cloudLastSig=cloudSig();
+  }catch(_){}}
 function cloudSig(){try{const s=JSON.stringify(S.store.dump());let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return s.length+":"+h}catch(_){return ""}}
 function cloudShowLast(){const t=Number(localStorage.getItem("vdh-cloud-lastpush")||0);const el=$("cloudLast");if(!el)return;el.textContent=t?("Последняя выгрузка: "+new Date(t).toLocaleString("ru-RU")):"Ещё ни разу не выгружалось"}
 const countMsgs=o=>{let n=(o&&o.messages||[]).length;for(const k in (o&&o.profileData)||{})n+=((o.profileData[k]||{}).messages||[]).length;return n};
@@ -1931,7 +1954,7 @@ let cloudForceUntil=0;
 async function cloudGuard(pass){
   try{const r=await fetch("/api/supa/rest/v1/backups?select=blob&limit=1",{headers:supaHeaders(true)});
     if(!r.ok)return null;const rows=await r.json();if(!rows||!rows.length)return null;
-    let obj;try{obj=await decBlob(rows[0].blob,pass)}catch(_){return "В облаке лежит копия, зашифрованная ДРУГИМ паролем. Если выгрузить с этим паролем, старая копия пропадёт. Впиши прежний пароль."}
+    let obj;try{obj=await decBlob(rows[0].blob,pass)}catch(_){cloudAskOldPass();return "В облаке лежит копия, зашифрованная ДРУГИМ паролем. Если выгрузить, старая копия пропадёт. Впиши прежний пароль в поле ниже."}
     const c=countMsgs(obj),l=countMsgs(S.store.dump());
     if(c>=10&&l<c/2)return "В облаке сообщений намного больше ("+c+"), чем здесь ("+l+"). Сначала нажми «Забрать», иначе облачная копия будет затёрта.";
   }catch(_){}
@@ -1942,14 +1965,14 @@ async function cloudPushNow(pass,silent){
   try{
     if(Date.now()>cloudForceUntil){const why=await cloudGuard(pass);
       if(why){if(!silent){$("cloudSyncMsg").textContent="⚠ "+why+" (Чтобы всё равно выгрузить — нажми «Выгрузить» ещё раз.)";cloudForceUntil=Date.now()+15000;$("cloudSyncMsg").dataset.guard=1}
-        else{cloudLastSig=cloudSig();$("cloudAuto").checked=false;try{localStorage.setItem("vdh-autopush","")}catch(_){}
+        else{cloudLastSig=cloudSig();$("cloudAuto").checked=false;try{localStorage.setItem("vdh-autopush","0")}catch(_){}
           $("cloudSyncMsg").textContent="⚠ Автовыгрузка выключена: "+why;toast("Автовыгрузка выключена — открой ☁ Облако")}
         return false}}
     cloudForceUntil=0;
     const blob=await encBlob(S.store.dump(),pass);
     const r=await fetch("/api/supa/rest/v1/backups?on_conflict=user_id",{method:"POST",headers:{...supaHeaders(true),Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify([{blob,updated_at:new Date().toISOString()}])});
     if(!r.ok)throw new Error("ошибка "+r.status+" "+(await r.text()));
-    cloudPass=pass;cloudLastSig=cloudSig();try{localStorage.setItem("vdh-cloud-lastpush",Date.now())}catch(_){}
+    cloudPassAccepted(pass);cloudLastSig=cloudSig();try{localStorage.setItem("vdh-cloud-lastpush",Date.now())}catch(_){}
     cloudShowLast();
     if(!silent){$("cloudSyncMsg").textContent="✓ Выгружено "+new Date().toLocaleString("ru-RU");toast("Выгружено в облако")}
     return true;}
@@ -1961,8 +1984,8 @@ async function cloudAutoTick(){const cb=$("cloudAuto");if(!cb||!cb.checked||!clo
   await cloudPushNow(pass,true);}
 function cloudStartAuto(){clearInterval(cloudAutoTimer);cloudAutoTimer=setInterval(cloudAutoTick,120000);}
 if($("cloudAuto")){
-  try{$("cloudAuto").checked=localStorage.getItem("vdh-autopush")==="1"}catch(_){}
-  $("cloudAuto").onchange=()=>{try{localStorage.setItem("vdh-autopush",$("cloudAuto").checked?"1":"")}catch(_){}
+  try{const v=localStorage.getItem("vdh-autopush");$("cloudAuto").checked=(v===null||v==="1")}catch(_){$("cloudAuto").checked=true}
+  $("cloudAuto").onchange=()=>{try{localStorage.setItem("vdh-autopush",$("cloudAuto").checked?"1":"0")}catch(_){}
     if($("cloudAuto").checked){toast("Автовыгрузка включена");cloudLastSig=null;cloudAutoTick();}else toast("Автовыгрузка выключена");};
   cloudShowLast();cloudStartAuto();
 }
@@ -1976,7 +1999,7 @@ $("cloudPull").onclick=async()=>{const pass=effPass();if(!pass){$("cloudSyncMsg"
   try{const r=await fetch("/api/supa/rest/v1/backups?select=blob,updated_at&limit=1",{headers:supaHeaders(true)});
     if(!r.ok)throw new Error("ошибка "+r.status);const rows=await r.json();
     if(!rows||!rows.length){$("cloudSyncMsg").textContent="В облаке пока пусто — сначала выгрузи.";return}
-    const obj=await decBlob(rows[0].blob,pass);S.store.load(obj,false);cloudPass=pass;
+    const obj=await decBlob(rows[0].blob,pass);S.store.load(obj,false);cloudPassAccepted(pass);
     $("cloudSyncMsg").textContent="✓ Забрано "+new Date(rows[0].updated_at).toLocaleString("ru-RU");toast("Данные забраны из облака")}
   catch(e){$("cloudSyncMsg").textContent="Не вышло: "+(e.name==="OperationError"?"неверный пароль или битые данные":e.message)}};
 let brList=[];
