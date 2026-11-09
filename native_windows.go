@@ -6,6 +6,7 @@ package main
 
 import (
 	"runtime"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
@@ -396,6 +397,27 @@ func menuLabel(m msg) string {
 	return label(m.Text)
 }
 
+// pickLeastRecent returns the message that was used longest ago (never-used ones first);
+// among equals it picks at random, so a fresh folder is not always answered with the same text.
+func pickLeastRecent(list []msg) (msg, bool) {
+	if len(list) == 0 {
+		return msg{}, false
+	}
+	min := list[0].LastUsedAt
+	for _, m := range list {
+		if m.LastUsedAt < min {
+			min = m.LastUsedAt
+		}
+	}
+	var pool []msg
+	for _, m := range list {
+		if m.LastUsedAt == min {
+			pool = append(pool, m)
+		}
+	}
+	return pool[rand.Intn(len(pool))], true
+}
+
 // showPasteMenu: onlyFolder=="" shows every folder (Ctrl + right click);
 // otherwise just that folder, or one sub-category of it (a bound hotkey).
 func showPasteMenu(onlyFolder, onlySub string) {
@@ -445,6 +467,14 @@ func showPasteMenu(onlyFolder, onlySub string) {
 			}
 		}
 		switch {
+		case onlyFolder == "" && f.QpAuto:
+			// auto folder: a plain item, one click pastes the message used longest ago
+			if m, ok := pickLeastRecent(inF); ok {
+				menuItems = append(menuItems, m)
+				addItem(menu, mfString, uintptr(cmdBase+len(menuItems)-1), label(f.Name)+"  ↻")
+			} else {
+				addItem(menu, mfGrayed, 0, label(f.Name)+" (пусто)")
+			}
 		case onlyFolder == "":
 			fm := popup()
 			folderInto(fm, f, inF)
@@ -460,6 +490,9 @@ func showPasteMenu(onlyFolder, onlySub string) {
 		}
 	}
 	addItem(menu, mfSeparator, 0, "")
+	if libProfile != "" {
+		addItem(menu, mfGrayed, 0, "Профиль: "+label(libProfile))
+	}
 	addItem(menu, mfString, cmdOpen, "Открыть Vice Dolls Helper")
 	cmd := track(menu)
 	pDestroyMenu.Call(menu) // also frees the submenus attached to it

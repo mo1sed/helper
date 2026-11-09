@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,7 +28,7 @@ var page []byte
 const addr = "127.0.0.1:47615"
 
 // appVersion is shown in the app; marker lets an update check it got a real build of this app.
-const appVersion = "4.3"
+const appVersion = "4.4"
 const marker = "VDH-APP-BUILD-MARKER-7f3a91"
 const url = "http://" + addr + "/"
 
@@ -99,6 +100,7 @@ var (
 	bmu      sync.Mutex
 	exePath  string
 	dataRev  int // bumped when the data file is changed outside the page (quick paste)
+	libProfile string // name of the active profile (only set when there is more than one)
 )
 
 type settings struct {
@@ -134,12 +136,15 @@ type msg struct {
 	Order     *float64 `json:"order"`
 	CreatedAt float64  `json:"createdAt"`
 	Hot       bool     `json:"hot"`
+	Uses       float64 `json:"uses"`
+	LastUsedAt float64 `json:"lastUsedAt"`
 }
 type folder struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Hotkey   string `json:"hotkey"`
 	QpHidden bool   `json:"qpHidden"` // hide this folder from the full Ctrl quick-paste menu
+	QpAuto   bool   `json:"qpAuto"`   // Ctrl menu: one click pastes the least recently used message
 	Subs     []struct {
 		ID     string `json:"id"`
 		Name   string `json:"name"`
@@ -155,10 +160,23 @@ func readLibrary() ([]folder, []msg) {
 	b, _ := os.ReadFile(dataPath)
 	mu.Unlock()
 	var d struct {
-		Folders  []folder `json:"folders"`
-		Messages []msg    `json:"messages"`
+		Folders       []folder `json:"folders"`
+		Messages      []msg    `json:"messages"`
+		ActiveProfile string   `json:"activeProfile"`
+		Profiles      []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"profiles"`
 	}
 	json.Unmarshal(b, &d)
+	libProfile = ""
+	if len(d.Profiles) > 1 {
+		for _, p := range d.Profiles {
+			if p.ID == d.ActiveProfile {
+				libProfile = p.Name
+			}
+		}
+	}
 	if len(d.Folders) == 0 {
 		json.Unmarshal([]byte(defaultFolders), &d.Folders)
 	}
@@ -251,8 +269,98 @@ func keepUsage(incoming []byte) []byte {
 	return out
 }
 
+
+// ---- safety copies: data must never be lost by a bug or a wrong click ----
+func backupDir() string {
+	d := filepath.Join(filepath.Dir(dataPath), "vicedolls-backups")
+	os.MkdirAll(d, 0755)
+	return d
+}
+
+// copyData copies the current data file into the backups folder under name. Caller holds mu.
+func copyData(name string) bool {
+	b, err := os.ReadFile(dataPath)
+	if err != nil || len(b) < 2 {
+		return false
+	}
+	return os.WriteFile(filepath.Join(backupDir(), name), b, 0644) == nil
+}
+
+// pruneBackups keeps only the newest `keep` files whose name starts with prefix.
+func pruneBackups(prefix string, keep int) {
+	ents, err := os.ReadDir(backupDir())
+	if err != nil {
+		return
+	}
+	var names []string
+	for _, e := range ents {
+		if strings.HasPrefix(e.Name(), prefix) {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names) // names carry a sortable date
+	for i := 0; i < len(names)-keep; i++ {
+		os.Remove(filepath.Join(backupDir(), names[i]))
+	}
+}
+
+// snapshotDaily: before the first save of each day, keep a copy of the previous state (last 14 days).
+func snapshotDaily() {
+	name := "daily-" + time.Now().Format("2006-01-02") + ".json"
+	if _, err := os.Stat(filepath.Join(backupDir(), name)); err == nil {
+		return
+	}
+	if copyData(name) {
+		pruneBackups("daily-", 14)
+	}
+}
+
+// snapshotPreVersion: once per app version, before anything touches the data (kept forever).
+func snapshotPreVersion() {
+	name := "pre-v" + appVersion + ".json"
+	if _, err := os.Stat(filepath.Join(backupDir(), name)); err == nil {
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	copyData(name)
+}
+
+// countMessages returns how many messages a data blob holds across all profiles.
+func countMessages(b []byte) int {
+	var d struct {
+		Messages    []json.RawMessage `json:"messages"`
+		ProfileData map[string]struct {
+			Messages []json.RawMessage `json:"messages"`
+		} `json:"profileData"`
+	}
+	if json.Unmarshal(b, &d) != nil {
+		return -1
+	}
+	n := len(d.Messages)
+	for _, p := range d.ProfileData {
+		n += len(p.Messages)
+	}
+	return n
+}
+
+// guardShrink: if a save would drop most of the library at once, keep a copy of what is being replaced. Caller holds mu.
+func guardShrink(incoming []byte) {
+	old, err := os.ReadFile(dataPath)
+	if err != nil {
+		return
+	}
+	a, b := countMessages(old), countMessages(incoming)
+	if a >= 10 && b >= 0 && b < a/2 {
+		if copyData("shrink-" + time.Now().Format("2006-01-02_150405") + ".json") {
+			pruneBackups("shrink-", 10)
+		}
+	}
+}
+
 // writeData saves atomically and keeps one previous version. Caller holds mu.
 func writeData(b []byte) error {
+	snapshotDaily()
 	tmp := dataPath + ".tmp"
 	if err := os.WriteFile(tmp, b, 0644); err != nil {
 		return err
@@ -513,6 +621,7 @@ func main() {
 	}
 
 	exePath = exe
+	snapshotPreVersion()
 	extractWindowExe() // unpack the standalone-window helper (Windows)
 	go cleanupOld(exe)
 
@@ -703,6 +812,7 @@ func main() {
 				return
 			}
 			b = keepUsage(b)
+			guardShrink(b)
 			if err := writeData(b); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
