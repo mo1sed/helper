@@ -502,7 +502,7 @@ func showPasteMenu(onlyFolder, onlySub string) {
 		for _, kind := range []string{"skip", "send"} {
 			var sub uintptr
 			for _, p := range ac.Presets {
-				steps, n := p.stepsFor(kind, ac.Key, ac.Pause, ac.MPause)
+				steps, n := p.stepsFor(kind, ac.Key, ac.Pause, ac.MPause, ac.MSkip)
 				if n == 0 || len(steps) == 0 {
 					continue
 				}

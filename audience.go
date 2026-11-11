@@ -26,6 +26,7 @@ type audConfig struct {
 	Key     string      `json:"key"`    // how a found folder is ticked: enter | down_enter | space | tab
 	Pause   int         `json:"pause"`  // ms between actions
 	Wait    int         `json:"wait"`   // ms to wait after that click, so the list has time to load (default 1500)
+	MSkip   bool        `json:"mskip"`  // macro: also drop the recorded pauses (fast, but can mis-tick)
 	MPause  *int        `json:"mpause"` // macro only: fixed ms between keys, recorded waits ignored (nil = as recorded)
 	Click   *bool       `json:"click"`  // click where the menu was opened before replaying (default on)
 }
@@ -66,7 +67,7 @@ var macroKeys = map[string]uint16{"down": vkDown, "up": vkUp, "enter": vkReturn,
 
 // macroSteps turns recorded tokens ("down", "enter", "wait:300" ...) into steps. Between two keys
 // without an explicit wait a short default pause is used, so slow pickers keep up.
-func macroSteps(tokens []string, pause int, mpause *int) []audStep {
+func macroSteps(tokens []string, pause int, mpause *int, skipWaits bool) []audStep {
 	p := audPause(pause) / 3
 	fixed := mpause != nil
 	if fixed {
@@ -82,7 +83,7 @@ func macroSteps(tokens []string, pause int, mpause *int) []audStep {
 	for _, t := range tokens {
 		t = strings.ToLower(strings.TrimSpace(t))
 		if strings.HasPrefix(t, "wait:") {
-			if fixed {
+			if skipWaits {
 				continue
 			}
 			ms := 0
@@ -116,12 +117,12 @@ func macroSteps(tokens []string, pause int, mpause *int) []audStep {
 }
 
 // stepsFor builds the macro for one preset and list kind.
-func (p audPreset) stepsFor(kind string, key string, pause int, mpause *int) ([]audStep, int) {
+func (p audPreset) stepsFor(kind string, key string, pause int, mpause *int, skipWaits bool) ([]audStep, int) {
 	if p.Mode == "macro" {
 		if kind == "send" {
 			return nil, 0
 		}
-		return macroSteps(p.Macro, pause, mpause), len(p.Macro)
+		return macroSteps(p.Macro, pause, mpause, skipWaits), len(p.Macro)
 	}
 	list := p.Skip
 	if kind == "send" {
