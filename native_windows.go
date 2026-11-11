@@ -497,18 +497,19 @@ func showPasteMenu(onlyFolder, onlySub string) {
 		for _, kind := range []string{"skip", "send"} {
 			var sub uintptr
 			for _, p := range ac.Presets {
-				list := p.Skip
-				if kind == "send" {
-					list = p.Send
-				}
-				if len(audNames(list)) == 0 {
+				steps, n := p.stepsFor(kind, ac.Key, ac.Pause)
+				if n == 0 || len(steps) == 0 {
 					continue
 				}
 				if sub == 0 {
 					sub = popup()
 				}
-				audItems = append(audItems, audPick{names: audNames(list), key: ac.Key, pause: ac.Pause})
-				addItem(sub, mfString, uintptr(cmdAudBase+len(audItems)-1), label(p.Name)+" ("+strconv.Itoa(len(audNames(list)))+")")
+				audItems = append(audItems, audPick{steps: steps})
+				txt := label(p.Name) + " (" + strconv.Itoa(n) + ")"
+				if p.Mode == "macro" {
+					txt = label(p.Name) + " (⌨ " + strconv.Itoa(n) + ")"
+				}
+				addItem(sub, mfString, uintptr(cmdAudBase+len(audItems)-1), txt)
 			}
 			if sub != 0 {
 				title := "🎯 Не отправлять"
@@ -746,9 +747,7 @@ func pasteText(text string) {
 /* ---------- audience presets: tick folders in the picker by typing their names ---------- */
 
 type audPick struct {
-	names []string
-	key   string
-	pause int
+	steps []audStep
 }
 
 var audItems []audPick
@@ -778,7 +777,7 @@ func runAudience(target uintptr, ap audPick) {
 		return cur != target
 	}
 	stopped := false
-	for _, st := range audienceSteps(ap.names, ap.key, ap.pause) {
+	for _, st := range ap.steps {
 		if aborted() {
 			stopped = true
 			break
@@ -810,4 +809,66 @@ func runAudience(target uintptr, ap audPick) {
 	} else {
 		pMessageBeep.Call(0x40) // done
 	}
+}
+
+/* recording: poll the keyboard (no hook, nothing is swallowed) while the user presses keys in the other app */
+
+func audRecSupported() bool { return true }
+
+func audRecStart() {
+	recMu.Lock()
+	if recActive {
+		recMu.Unlock()
+		return
+	}
+	recActive = true
+	recTokens = nil
+	recMu.Unlock()
+	go func() {
+		keys := []struct {
+			vk   uintptr
+			name string
+		}{{vkDown, "down"}, {vkUp, "up"}, {vkReturn, "enter"}, {vkSpace, "space"}, {vkTab, "tab"}}
+		down := map[uintptr]bool{}
+		last := time.Now()
+		first := true
+		deadline := time.Now().Add(2 * time.Minute)
+		for time.Now().Before(deadline) {
+			recMu.Lock()
+			act := recActive
+			recMu.Unlock()
+			if !act {
+				break
+			}
+			if st, _, _ := pGetAsyncKeyState.Call(0x77); st&0x8000 != 0 { // F8 = stop
+				break
+			}
+			for _, k := range keys {
+				st, _, _ := pGetAsyncKeyState.Call(k.vk)
+				pressed := st&0x8000 != 0
+				if pressed && !down[k.vk] {
+					gap := int(time.Since(last).Milliseconds())
+					recMu.Lock()
+					if !first && gap > 300 {
+						recTokens = append(recTokens, "wait:"+strconv.Itoa((gap+25)/50*50))
+					}
+					recTokens = append(recTokens, k.name)
+					recMu.Unlock()
+					last = time.Now()
+					first = false
+				}
+				down[k.vk] = pressed
+			}
+			time.Sleep(8 * time.Millisecond)
+		}
+		recMu.Lock()
+		recActive = false
+		recMu.Unlock()
+	}()
+}
+
+func audRecStop() {
+	recMu.Lock()
+	recActive = false
+	recMu.Unlock()
 }

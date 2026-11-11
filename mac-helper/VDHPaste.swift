@@ -87,6 +87,93 @@ func markUsed(_ id: String) {
     try? out.write(to: URL(fileURLWithPath: DATA_PATH), options: .atomic)
 }
 
+// MARK: - Audience presets: tick folders in the OnlyMonster picker by typing their names
+
+struct AudPreset { let name: String; let skip: [String]; let send: [String]; let macro: [String]; let isMacro: Bool }
+
+func loadAudience() -> (presets: [AudPreset], key: String, pause: Int) {
+    guard let data = FileManager.default.contents(atPath: DATA_PATH),
+          let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let au = root["audience"] as? [String: Any] else { return ([], "down_enter", 350) }
+    func names(_ v: Any?) -> [String] {
+        var out: [String] = []
+        for x in (v as? [Any]) ?? [] {
+            let t = ((x as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty && !out.contains(where: { $0.lowercased() == t.lowercased() }) { out.append(t) }
+        }
+        return out
+    }
+    var presets: [AudPreset] = []
+    for p in (au["presets"] as? [[String: Any]]) ?? [] {
+        let macro = ((p["macro"] as? [Any]) ?? []).compactMap { ($0 as? String)?.lowercased() }
+        presets.append(AudPreset(name: (p["name"] as? String) ?? "Пресет", skip: names(p["skip"]), send: names(p["send"]),
+                                 macro: macro, isMacro: (p["mode"] as? String) == "macro"))
+    }
+    let key = (au["key"] as? String) ?? "down_enter"
+    var pause = (au["pause"] as? NSNumber)?.intValue ?? 350
+    if pause < 100 { pause = 350 }
+    if pause > 3000 { pause = 3000 }
+    return (presets, key, pause)
+}
+
+final class AudInfo: NSObject {
+    let names: [String]; let macro: [String]; let key: String; let pause: Int
+    init(_ n: [String], _ m: [String], _ k: String, _ p: Int) { names = n; macro = m; key = k; pause = p }
+}
+
+let macroCodes: [String: CGKeyCode] = ["down": 125, "up": 126, "enter": 36, "space": 49, "tab": 48]
+
+func sendKey(_ code: CGKeyCode, cmd: Bool = false) {
+    let src = CGEventSource(stateID: .combinedSessionState)
+    let down = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true)
+    let up = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false)
+    if cmd { down?.flags = .maskCommand; up?.flags = .maskCommand }
+    down?.post(tap: .cghidEventTap)
+    up?.post(tap: .cghidEventTap)
+}
+
+// For each name: type it into the focused search box, tick it, clear the box.
+// Esc or switching to another app stops it right away. It never presses "Send".
+func runAudience(_ info: AudInfo) {
+    DispatchQueue.global().async {
+        Thread.sleep(forTimeInterval: 0.3)
+        let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let pb = NSPasteboard.general
+        let prev = pb.string(forType: .string)
+        let ms = Double(info.pause) / 1000.0
+        var stopped = false
+        func aborted() -> Bool {
+            if CGEventSource.keyState(.combinedSessionState, key: 53) { return true } // Esc
+            return NSWorkspace.shared.frontmostApplication?.processIdentifier != target
+        }
+        for t in info.macro { // recorded / built key sequence
+            if aborted() { stopped = true; break }
+            if t.hasPrefix("wait:"), let w = Double(t.dropFirst(5)) { Thread.sleep(forTimeInterval: min(w, 5000) / 1000.0); continue }
+            if let code = macroCodes[t] { sendKey(code); Thread.sleep(forTimeInterval: ms / 3) }
+        }
+        for n in info.names {
+            if aborted() { stopped = true; break }
+            DispatchQueue.main.sync { pb.clearContents(); pb.setString(n, forType: .string) }
+            sendKey(9, cmd: true)                       // Cmd+V
+            Thread.sleep(forTimeInterval: ms)
+            switch info.key {
+            case "down_enter": sendKey(125); Thread.sleep(forTimeInterval: 0.08); sendKey(36)
+            case "space": sendKey(49)
+            case "tab": sendKey(48)
+            default: sendKey(36)                        // Return
+            }
+            Thread.sleep(forTimeInterval: ms / 2)
+            sendKey(0, cmd: true)                       // Cmd+A
+            sendKey(51)                                 // Delete
+            Thread.sleep(forTimeInterval: ms / 2)
+        }
+        DispatchQueue.main.async {
+            if let prev = prev { pb.clearContents(); pb.setString(prev, forType: .string) }
+            NSSound(named: stopped ? "Basso" : "Glass")?.play()
+        }
+    }
+}
+
 final class PickInfo: NSObject {
     let text: String; let id: String
     init(_ t: String, _ i: String) { text = t; id = i }
@@ -190,6 +277,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             fi.submenu = fm
             menu.addItem(fi)
         }
+        do {
+            let au = loadAudience()
+            for kind in ["skip", "send"] {
+                let sub = NSMenu()
+                for p in au.presets {
+                    if p.isMacro && kind == "send" { continue }
+                    let list = p.isMacro ? p.macro : (kind == "skip" ? p.skip : p.send)
+                    if list.isEmpty { continue }
+                    let it = NSMenuItem(title: "\(p.name) (\(p.isMacro ? "⌨ " : "")\(list.count))", action: #selector(pickAud(_:)), keyEquivalent: "")
+                    it.target = self
+                    it.representedObject = p.isMacro ? AudInfo([], list, au.key, au.pause) : AudInfo(list, [], au.key, au.pause)
+                    sub.addItem(it)
+                }
+                if sub.items.isEmpty { continue }
+                let top = NSMenuItem(title: kind == "skip" ? "🎯 Не отправлять" : "🎯 Отправить", action: nil, keyEquivalent: "")
+                top.submenu = sub
+                menu.addItem(top)
+            }
+        }
         if !profile.isEmpty {
             menu.addItem(.separator())
             let pi = NSMenuItem(title: "Профиль: " + profile, action: nil, keyEquivalent: "")
@@ -207,6 +313,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let fresh = buildMenu(forStatusBar: true)
         menu.removeAllItems()
         for it in fresh.items { fresh.removeItem(it); menu.addItem(it) }
+    }
+
+    @objc func pickAud(_ sender: NSMenuItem) {
+        guard let info = sender.representedObject as? AudInfo else { return }
+        runAudience(info)
     }
 
     @objc func pick(_ sender: NSMenuItem) {

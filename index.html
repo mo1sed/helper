@@ -126,6 +126,7 @@ h1 span{color:var(--accent)}
 .aud-card{border:1px solid var(--line);border-radius:10px;background:var(--surface-2);padding:10px;display:flex;flex-direction:column;gap:6px}
 .aud-card .ah{display:flex;gap:8px;align-items:center}.aud-card .ah input{flex:1;min-width:0;font-weight:600}
 .aud-card label{font-size:12px;color:var(--muted)}.aud-card textarea{width:100%;min-height:76px;resize:vertical;font:inherit;font-size:13px}
+.amacro{display:flex;gap:6px;flex-wrap:wrap;min-height:30px;align-items:center}.atok{padding:3px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg,#111);font-family:var(--f-mono);font-size:12px}.abar{display:flex;gap:6px;flex-wrap:wrap}.aud-card select.amode{align-self:flex-start}
 .aud-set{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13px;margin-top:6px}.aud-set input[type=number]{width:80px}
 .prof-add{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
 .prof-add input[type=text]{flex:1;min-width:160px}
@@ -569,8 +570,8 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
     <div class="prof-list" id="audList"></div>
     <div class="prof-add"><button class="btn small primary" id="audAdd" type="button">+ Новый пресет</button></div>
     <div class="aud-set">
-      <label>Отмечать папку клавишей
-        <select id="audKey"><option value="enter">Enter</option><option value="down_enter">↓ и Enter</option><option value="space">Пробел</option><option value="tab">Tab</option></select></label>
+      <label>В режиме названий отмечать папку клавишей
+        <select id="audKey"><option value="down_enter">↓ и Enter</option><option value="enter">Только Enter</option><option value="space">Пробел</option><option value="tab">Tab</option></select></label>
       <label>Пауза, мс <input type="number" id="audPause" min="100" max="3000" step="50"></label>
     </div>
     <div class="hint">Работает в Windows через меню по Ctrl. Если папки не отмечаются, смени клавишу или увеличь паузу.</div>
@@ -1805,9 +1806,15 @@ function renderProfiles(){
   }
 }
 /* ---------- audience presets (folder names ticked by the Ctrl menu macro) ---------- */
-const audGet=()=>{const a=S.audience||{};return{presets:(a.presets||[]).map(p=>({...p})),key:a.key||"enter",pause:a.pause||350}};
+const audGet=()=>{const a=S.audience||{};return{presets:(a.presets||[]).map(p=>({...p})),key:a.key||"down_enter",pause:a.pause||350}};
+let audRecSupported=null,audRecTimer=null,audRecFor=null;
+const audTokTxt=t=>({down:"↓",up:"↑",enter:"Enter",space:"Пробел",tab:"Tab"}[t]||(t.startsWith("wait:")?"⏱"+t.slice(5):t));
+const audRec=async a=>{try{const r=await fetch("/api/audrec",{method:"POST",body:JSON.stringify({action:a})});return await r.json()}catch(_){return{supported:false}}};
 const audSave=a=>{S.audience=a;S.store.setAudience(a)};
 const audLines=t=>t.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+function audFinishRec(id,r){clearInterval(audRecTimer);audRecFor=null;
+  const x=audGet();const q=x.presets.find(y=>y.id===id);if(q){if((r.tokens||[]).length){q.macro=r.tokens;audSave(x);toast("Записано шагов: "+r.tokens.length)}else toast("Ничего не записано")}
+  renderAudience()}
 function renderAudience(){
   const a=audGet(),box=$("audList");box.textContent="";
   $("audKey").value=a.key;$("audPause").value=a.pause;
@@ -1818,15 +1825,45 @@ function renderAudience(){
     const nm=document.createElement("input");nm.type="text";nm.className="aname";nm.value=p.name||"";nm.maxLength=40;nm.placeholder="Название (например, модель)";
     const del=document.createElement("button");del.type="button";del.className="btn small ghost";del.textContent="✕";del.title="Удалить пресет";
     hd.append(nm,del);
-    const l1=document.createElement("label");l1.textContent="Не отправлять: папки по одной в строке";
-    const t1=document.createElement("textarea");t1.className="askip";t1.value=(p.skip||[]).join("\n");t1.spellcheck=false;
-    const l2=document.createElement("label");l2.textContent="Отправить (необязательно)";
-    const t2=document.createElement("textarea");t2.className="asend";t2.value=(p.send||[]).join("\n");t2.spellcheck=false;t2.style.minHeight="44px";
-    const upd=()=>{const x=audGet();const q=x.presets.find(y=>y.id===p.id);if(!q)return;q.name=nm.value.trim()||"Без названия";q.skip=audLines(t1.value);q.send=audLines(t2.value);audSave(x)};
-    nm.onchange=upd;t1.onchange=upd;t2.onchange=upd;
+    const md=document.createElement("select");md.className="amode";
+    md.innerHTML='<option value="names">Вписывать названия папок</option><option value="macro">Повторить записанные клавиши</option>';md.value=p.mode==="macro"?"macro":"names";
+    md.onchange=()=>{const x=audGet();const q=x.presets.find(y=>y.id===p.id);if(!q)return;q.mode=md.value;audSave(x);renderAudience()};
+    c.append(hd,md);
+    const upd=()=>{const x=audGet();const q=x.presets.find(y=>y.id===p.id);if(!q)return;q.name=nm.value.trim()||"Без названия";
+      const t1=c.querySelector(".askip"),t2=c.querySelector(".asend");if(t1)q.skip=audLines(t1.value);if(t2)q.send=audLines(t2.value);audSave(x)};
+    nm.onchange=upd;
+    if(md.value==="names"){
+      const l1=document.createElement("label");l1.textContent="Не отправлять: папки по одной в строке";
+      const t1=document.createElement("textarea");t1.className="askip";t1.value=(p.skip||[]).join("\n");t1.spellcheck=false;
+      const l2=document.createElement("label");l2.textContent="Отправить (необязательно)";
+      const t2=document.createElement("textarea");t2.className="asend";t2.value=(p.send||[]).join("\n");t2.spellcheck=false;t2.style.minHeight="44px";
+      t1.onchange=upd;t2.onchange=upd;c.append(l1,t1,l2,t2);
+    }else{
+      const macro=p.macro||[];
+      const l1=document.createElement("label");l1.textContent="Не отправлять: клавиши, которые приложение нажмёт по порядку";
+      const row=document.createElement("div");row.className="amacro";
+      if(!macro.length){const e=document.createElement("span");e.className="hint";e.textContent="пока пусто";row.appendChild(e)}
+      for(const t of macro){const ch=document.createElement("span");ch.className="atok";ch.textContent=audTokTxt(t);row.appendChild(ch)}
+      const setMacro=m=>{const x=audGet();const q=x.presets.find(y=>y.id===p.id);if(!q)return;q.macro=m;audSave(x);renderAudience()};
+      const bar=document.createElement("div");bar.className="abar";
+      const addB=(txt,fn,cls)=>{const b=document.createElement("button");b.type="button";b.className="btn small "+(cls||"ghost");b.textContent=txt;b.onclick=fn;bar.appendChild(b);return b};
+      const recording=audRecFor===p.id;
+      if(recording){addB("■ Стоп",async()=>{const r=await audRec("stop");audFinishRec(p.id,r)},"primary")}
+      else{
+        if(audRecSupported!==false)addB("● Записать",async()=>{const r=await audRec("start");audRecSupported=!!r.supported;
+          if(!r.supported){renderAudience();return}
+          audRecFor=p.id;renderAudience();
+          clearInterval(audRecTimer);audRecTimer=setInterval(async()=>{const r2=await audRec("status");if(!r2.active)audFinishRec(p.id,r2)},400)},"primary");
+        for(const [k,tx] of [["down","↓"],["up","↑"],["enter","Enter"],["space","Пробел"],["tab","Tab"]])addB("+ "+tx,()=>setMacro([...macro,k]));
+        addB("⌫ последнюю",()=>setMacro(macro.slice(0,-1)));addB("Очистить",()=>setMacro([]));
+      }
+      c.append(l1,row,bar);
+      if(recording){const h=document.createElement("div");h.className="hint";h.textContent="● Идёт запись. Переключись в OnlyMonster, нажми нужные ↓ ↑ Enter Пробел Tab, а когда закончишь, нажми F8.";c.appendChild(h)}
+      else if(audRecSupported===false){const h=document.createElement("div");h.className="hint";h.textContent="Запись клавиш есть только в Windows. Здесь набери последовательность кнопками «+ ↓», «+ Enter» и так далее.";c.appendChild(h)}
+    }
     del.onclick=()=>{if(!del.dataset.sure){del.dataset.sure=1;del.textContent="удалить?";setTimeout(()=>{del.textContent="✕";delete del.dataset.sure},3000);return}
       const x=audGet();x.presets=x.presets.filter(y=>y.id!==p.id);audSave(x);renderAudience()};
-    c.append(hd,l1,t1,l2,t2);box.appendChild(c);
+    box.appendChild(c);
   }
 }
 $("audBtn").onclick=()=>{renderAudience();$("audModal").hidden=false};
@@ -1857,7 +1894,7 @@ function boot(store){
       const pa=pl.find(p=>p.id===st.activeProfile)||pl[0];S.profiles=pl;S.activeProfile=pa.id;
       $("profBtn").textContent="👤 "+pa.name+" ▾";$("profBtn").classList.toggle("primary",pl.length>1);
       if(!$("profModal").hidden)renderProfiles()}
-    S.audience=st.audience||{presets:[],key:"enter",pause:350};
+    S.audience=st.audience||{presets:[],key:"down_enter",pause:350};
     S.salary=st.salary||{months:{}};if(!$("viewSal").hidden)renderSalary();
     S.prices=st.prices||{general:[],models:[]};if(!$("viewPrice").hidden)renderPrice();
     S.shift=st.shift||{entries:[]};if(!$("viewShift").hidden)renderShift();

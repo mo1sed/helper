@@ -27,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
 
     func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.regular)
+        buildMainMenu()
         startServer()
 
         let cfg = WKWebViewConfiguration()
@@ -45,6 +46,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         NSApp.activate(ignoringOtherApps: true)
 
         waitAndLoad(0)
+    }
+
+    // Without a menu bar, macOS does not route Cmd+V / Cmd+C / Cmd+X / Cmd+A / Cmd+Z to the web view.
+    func buildMainMenu() {
+        let main = NSMenu()
+        let appItem = NSMenuItem(); main.addItem(appItem)
+        let appMenu = NSMenu(); appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "Скрыть Vice Dolls Helper", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Выйти", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let editItem = NSMenuItem(); main.addItem(editItem)
+        let edit = NSMenu(title: "Правка"); editItem.submenu = edit
+        edit.addItem(withTitle: "Отменить", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: "Повторить", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Вырезать", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Копировать", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Вставить", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Выбрать всё", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        NSApp.mainMenu = main
     }
 
     func startServer() {

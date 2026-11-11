@@ -9,3 +9,7 @@ func nativeStop()  {}
 
 func nativeRebind()                   {}
 func hotkeyStatus() map[string]string { return map[string]string{} }
+
+func audRecSupported() bool { return false }
+func audRecStart()          {}
+func audRecStop()           {}

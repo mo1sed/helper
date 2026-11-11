@@ -28,7 +28,7 @@ var page []byte
 const addr = "127.0.0.1:47615"
 
 // appVersion is shown in the app; marker lets an update check it got a real build of this app.
-const appVersion = "4.11"
+const appVersion = "4.12"
 const marker = "VDH-APP-BUILD-MARKER-7f3a91"
 const url = "http://" + addr + "/"
 
@@ -698,6 +698,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"path": path})
 	})
+	http.HandleFunc("/api/audrec", handleAudRec)
 	http.HandleFunc("/api/hotkeys", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(hotkeyStatus())
