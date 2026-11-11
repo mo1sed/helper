@@ -5,9 +5,10 @@
 package main
 
 import (
-	"runtime"
 	"math/rand"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -101,9 +102,10 @@ const (
 	nifIcon    = 2
 	nifTip     = 4
 
-	cmdOpen = 1
-	cmdQuit = 2
-	cmdBase = 1000
+	cmdOpen    = 1
+	cmdQuit    = 2
+	cmdBase    = 1000
+	cmdAudBase = 40000
 )
 
 type point struct{ X, Y int32 }
@@ -489,6 +491,34 @@ func showPasteMenu(onlyFolder, onlySub string) {
 			folderInto(menu, f, inF)
 		}
 	}
+	audItems = audItems[:0]
+	if onlyFolder == "" {
+		ac := readAudience()
+		for _, kind := range []string{"skip", "send"} {
+			var sub uintptr
+			for _, p := range ac.Presets {
+				list := p.Skip
+				if kind == "send" {
+					list = p.Send
+				}
+				if len(audNames(list)) == 0 {
+					continue
+				}
+				if sub == 0 {
+					sub = popup()
+				}
+				audItems = append(audItems, audPick{names: audNames(list), key: ac.Key, pause: ac.Pause})
+				addItem(sub, mfString, uintptr(cmdAudBase+len(audItems)-1), label(p.Name)+" ("+strconv.Itoa(len(audNames(list)))+")")
+			}
+			if sub != 0 {
+				title := "🎯 Не отправлять"
+				if kind == "send" {
+					title = "🎯 Отправить"
+				}
+				addItem(menu, mfPopup, sub, title)
+			}
+		}
+	}
 	addItem(menu, mfSeparator, 0, "")
 	if libProfile != "" {
 		addItem(menu, mfGrayed, 0, "Профиль: "+label(libProfile))
@@ -500,6 +530,10 @@ func showPasteMenu(onlyFolder, onlySub string) {
 	switch {
 	case cmd == cmdOpen:
 		go openWindow(true)
+	case cmd >= cmdAudBase && int(cmd-cmdAudBase) < len(audItems):
+		ap := audItems[cmd-cmdAudBase]
+		focus(prev)
+		go runAudience(prev, ap)
 	case cmd >= cmdBase && int(cmd-cmdBase) < len(menuItems):
 		m := menuItems[cmd-cmdBase]
 		focus(prev)
@@ -706,5 +740,74 @@ func pasteText(text string) {
 			time.Sleep(900 * time.Millisecond) // slow apps read the clipboard late
 			setClipboard(prevText)
 		}()
+	}
+}
+
+/* ---------- audience presets: tick folders in the picker by typing their names ---------- */
+
+type audPick struct {
+	names []string
+	key   string
+	pause int
+}
+
+var audItems []audPick
+
+var pMessageBeep = user32.NewProc("MessageBeep")
+
+func sendIns(ins ...input) {
+	pSendInput.Call(uintptr(len(ins)), uintptr(unsafe.Pointer(&ins[0])), unsafe.Sizeof(ins[0]))
+}
+
+// runAudience replays the macro in the window that had focus. It stops at once if Esc is pressed
+// or the focus moves to another window, so keys never land somewhere unintended.
+func runAudience(target uintptr, ap audPick) {
+	time.Sleep(200 * time.Millisecond)
+	releaseModifiers()
+	var prevText string
+	var hadPrev bool
+	if openClip() {
+		prevText, hadPrev = readClipboard()
+		pCloseClipboard.Call()
+	}
+	aborted := func() bool {
+		if st, _, _ := pGetAsyncKeyState.Call(0x1B); st&0x8000 != 0 {
+			return true
+		}
+		cur, _, _ := pGetForegroundWindow.Call()
+		return cur != target
+	}
+	stopped := false
+	for _, st := range audienceSteps(ap.names, ap.key, ap.pause) {
+		if aborted() {
+			stopped = true
+			break
+		}
+		switch st.Kind {
+		case "paste":
+			if !setClipboard(st.Text) {
+				stopped = true
+			} else {
+				sendIns(key(vkControl, false), key(vkV, false), key(vkV, true), key(vkControl, true))
+			}
+		case "ctrl":
+			sendIns(key(vkControl, false), key(st.VK, false), key(st.VK, true), key(vkControl, true))
+		case "key":
+			sendIns(key(st.VK, false), key(st.VK, true))
+		case "wait":
+			time.Sleep(time.Duration(st.Ms) * time.Millisecond)
+		}
+		if stopped {
+			break
+		}
+	}
+	if hadPrev {
+		time.Sleep(300 * time.Millisecond)
+		setClipboard(prevText)
+	}
+	if stopped {
+		pMessageBeep.Call(0x30) // warning: stopped early
+	} else {
+		pMessageBeep.Call(0x40) // done
 	}
 }
