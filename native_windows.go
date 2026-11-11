@@ -424,6 +424,8 @@ func pickLeastRecent(list []msg) (msg, bool) {
 // otherwise just that folder, or one sub-category of it (a bound hotkey).
 func showPasteMenu(onlyFolder, onlySub string) {
 	prev, _, _ := pGetForegroundWindow.Call()
+	var origin point
+	pGetCursorPos.Call(uintptr(unsafe.Pointer(&origin)))
 	folders, msgs := readLibrary()
 	sort.SliceStable(msgs, func(i, j int) bool {
 		if msgs[i].Hot != msgs[j].Hot {
@@ -533,6 +535,8 @@ func showPasteMenu(onlyFolder, onlySub string) {
 		go openWindow(true)
 	case cmd >= cmdAudBase && int(cmd-cmdAudBase) < len(audItems):
 		ap := audItems[cmd-cmdAudBase]
+		ap.click = readAudience().Click == nil || *readAudience().Click
+		ap.at = origin
 		focus(prev)
 		go runAudience(prev, ap)
 	case cmd >= cmdBase && int(cmd-cmdBase) < len(menuItems):
@@ -748,11 +752,25 @@ func pasteText(text string) {
 
 type audPick struct {
 	steps []audStep
+	click bool  // click where the menu was opened first (re-focuses the picker, which closes when our menu takes focus)
+	at    point // that place
 }
 
 var audItems []audPick
 
-var pMessageBeep = user32.NewProc("MessageBeep")
+var (
+	pMessageBeep  = user32.NewProc("MessageBeep")
+	pSetCursorPos = user32.NewProc("SetCursorPos")
+	pMouseEvent   = user32.NewProc("mouse_event")
+)
+
+// clickAt moves the pointer to p and does a left click.
+func clickAt(p point) {
+	pSetCursorPos.Call(uintptr(p.X), uintptr(p.Y))
+	time.Sleep(60 * time.Millisecond)
+	pMouseEvent.Call(0x0002, 0, 0, 0, 0) // LEFTDOWN
+	pMouseEvent.Call(0x0004, 0, 0, 0, 0) // LEFTUP
+}
 
 func sendIns(ins ...input) {
 	pSendInput.Call(uintptr(len(ins)), uintptr(unsafe.Pointer(&ins[0])), unsafe.Sizeof(ins[0]))
@@ -768,6 +786,10 @@ func runAudience(target uintptr, ap audPick) {
 	if openClip() {
 		prevText, hadPrev = readClipboard()
 		pCloseClipboard.Call()
+	}
+	if ap.click {
+		clickAt(ap.at)
+		time.Sleep(600 * time.Millisecond) // let the list open
 	}
 	aborted := func() bool {
 		if st, _, _ := pGetAsyncKeyState.Call(0x1B); st&0x8000 != 0 {

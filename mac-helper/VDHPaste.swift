@@ -91,10 +91,10 @@ func markUsed(_ id: String) {
 
 struct AudPreset { let name: String; let skip: [String]; let send: [String]; let macro: [String]; let isMacro: Bool }
 
-func loadAudience() -> (presets: [AudPreset], key: String, pause: Int) {
+func loadAudience() -> (presets: [AudPreset], key: String, pause: Int, click: Bool) {
     guard let data = FileManager.default.contents(atPath: DATA_PATH),
           let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-          let au = root["audience"] as? [String: Any] else { return ([], "down_enter", 350) }
+          let au = root["audience"] as? [String: Any] else { return ([], "down_enter", 350, true) }
     func names(_ v: Any?) -> [String] {
         var out: [String] = []
         for x in (v as? [Any]) ?? [] {
@@ -113,11 +113,12 @@ func loadAudience() -> (presets: [AudPreset], key: String, pause: Int) {
     var pause = (au["pause"] as? NSNumber)?.intValue ?? 350
     if pause < 100 { pause = 350 }
     if pause > 3000 { pause = 3000 }
-    return (presets, key, pause)
+    return (presets, key, pause, (au["click"] as? Bool) ?? true)
 }
 
 final class AudInfo: NSObject {
     let names: [String]; let macro: [String]; let key: String; let pause: Int
+    var click = true; var at = CGPoint.zero
     init(_ n: [String], _ m: [String], _ k: String, _ p: Int) { names = n; macro = m; key = k; pause = p }
 }
 
@@ -137,6 +138,13 @@ func sendKey(_ code: CGKeyCode, cmd: Bool = false) {
 func runAudience(_ info: AudInfo) {
     DispatchQueue.global().async {
         Thread.sleep(forTimeInterval: 0.3)
+        if info.click { // the picker closes when our menu takes focus: click where the menu was opened to reopen it
+            let src = CGEventSource(stateID: .combinedSessionState)
+            for t in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
+                CGEvent(mouseEventSource: src, mouseType: t, mouseCursorPosition: info.at, mouseButton: .left)?.post(tap: .cghidEventTap)
+            }
+            Thread.sleep(forTimeInterval: 0.6)
+        }
         let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let pb = NSPasteboard.general
         let prev = pb.string(forType: .string)
@@ -214,6 +222,7 @@ func pasteText(_ text: String) {
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     var hotKeyRef: EventHotKeyRef?
+    var origin = CGPoint.zero
 
     func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -287,7 +296,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     if list.isEmpty { continue }
                     let it = NSMenuItem(title: "\(p.name) (\(p.isMacro ? "⌨ " : "")\(list.count))", action: #selector(pickAud(_:)), keyEquivalent: "")
                     it.target = self
-                    it.representedObject = p.isMacro ? AudInfo([], list, au.key, au.pause) : AudInfo(list, [], au.key, au.pause)
+                    let ai = p.isMacro ? AudInfo([], list, au.key, au.pause) : AudInfo(list, [], au.key, au.pause)
+                    ai.click = au.click && !forStatusBar; ai.at = origin
+                    it.representedObject = ai
                     sub.addItem(it)
                 }
                 if sub.items.isEmpty { continue }
@@ -328,6 +339,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // Pop the messages menu at the mouse (triggered by the hotkey).
     func popAtMouse() {
+        // remember where the menu opens (CoreGraphics coordinates have the origin at the top-left)
+        let m = NSEvent.mouseLocation
+        origin = CGPoint(x: m.x, y: (NSScreen.screens.first?.frame.height ?? 0) - m.y)
         let menu = buildMenu(forStatusBar: false)
         let loc = NSEvent.mouseLocation
         menu.popUp(positioning: nil, at: loc, in: nil)

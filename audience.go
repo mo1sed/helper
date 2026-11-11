@@ -25,6 +25,7 @@ type audConfig struct {
 	Presets []audPreset `json:"presets"`
 	Key     string      `json:"key"`   // how a found folder is ticked: enter | down_enter | space | tab
 	Pause   int         `json:"pause"` // ms between actions
+	Click   *bool       `json:"click"` // click where the menu was opened before replaying (default on)
 }
 
 func readAudience() audConfig {

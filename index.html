@@ -566,13 +566,14 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
 <div class="modal" id="audModal" hidden role="dialog" aria-modal="true" aria-labelledby="audTitle">
   <div class="mbox" style="width:min(640px,100%)">
     <div class="mhd"><h2 id="audTitle">🎯 Аудитория для рассылок</h2><button class="btn small ghost" id="audClose" type="button">Закрыть</button></div>
-    <div class="hint">Впиши названия папок так, как они называются в выборе аудитории (по одной в строке). Потом: кликни в поле «Search» в списке папок, нажми Ctrl + правый клик → «🎯 Не отправлять» → выбери пресет. Приложение само вобьёт названия и отметит папки. Остановить можно клавишей Esc. «Отправить» приложение не нажимает.</div>
+    <div class="hint">Впиши названия папок так, как они называются в выборе аудитории (по одной в строке). Потом открой меню (Ctrl + правый клик) прямо над полем выбора папок, например «Click here and select lists to exclude», → «🎯 Не отправлять» → выбери пресет. Приложение само кликнет в это поле и откроет список. Приложение само вобьёт названия и отметит папки. Остановить можно клавишей Esc. «Отправить» приложение не нажимает.</div>
     <div class="prof-list" id="audList"></div>
     <div class="prof-add"><button class="btn small primary" id="audAdd" type="button">+ Новый пресет</button></div>
     <div class="aud-set">
       <label>В режиме названий отмечать папку клавишей
         <select id="audKey"><option value="down_enter">↓ и Enter</option><option value="enter">Только Enter</option><option value="space">Пробел</option><option value="tab">Tab</option></select></label>
       <label>Пауза, мс <input type="number" id="audPause" min="100" max="3000" step="50"></label>
+      <label class="qp-show"><input type="checkbox" id="audClick"><span>Сначала кликнуть туда, где открыл меню</span></label>
     </div>
     <div class="hint">Работает в Windows через меню по Ctrl. Если папки не отмечаются, смени клавишу или увеличь паузу.</div>
   </div>
@@ -1806,7 +1807,7 @@ function renderProfiles(){
   }
 }
 /* ---------- audience presets (folder names ticked by the Ctrl menu macro) ---------- */
-const audGet=()=>{const a=S.audience||{};return{presets:(a.presets||[]).map(p=>({...p})),key:a.key||"down_enter",pause:a.pause||350}};
+const audGet=()=>{const a=S.audience||{};return{presets:(a.presets||[]).map(p=>({...p})),key:a.key||"down_enter",pause:a.pause||350,click:a.click!==false}};
 let audRecSupported=null,audRecTimer=null,audRecFor=null;
 const audTokTxt=t=>({down:"↓",up:"↑",enter:"Enter",space:"Пробел",tab:"Tab"}[t]||(t.startsWith("wait:")?"⏱"+t.slice(5):t));
 const audRec=async a=>{try{const r=await fetch("/api/audrec",{method:"POST",body:JSON.stringify({action:a})});return await r.json()}catch(_){return{supported:false}}};
@@ -1817,7 +1818,7 @@ function audFinishRec(id,r){clearInterval(audRecTimer);audRecFor=null;
   renderAudience()}
 function renderAudience(){
   const a=audGet(),box=$("audList");box.textContent="";
-  $("audKey").value=a.key;$("audPause").value=a.pause;
+  $("audKey").value=a.key;$("audPause").value=a.pause;$("audClick").checked=a.click;
   if(!a.presets.length){const h=document.createElement("div");h.className="hint";h.textContent="Пока пусто. Нажми «+ Новый пресет», например по имени модели.";box.appendChild(h)}
   for(const p of a.presets){
     const c=document.createElement("div");c.className="aud-card";c.dataset.id=p.id;
@@ -1871,6 +1872,7 @@ $("audClose").onclick=()=>{$("audModal").hidden=true};
 $("audModal").addEventListener("mousedown",e=>{if(e.target===$("audModal"))$("audModal").hidden=true});
 $("audAdd").onclick=()=>{const x=audGet();x.presets.push({id:"a"+Date.now().toString(36),name:"Новый пресет",skip:[],send:[]});audSave(x);renderAudience();
   const n=$("audList").querySelector(".aud-card:last-child .aname");if(n){n.focus();n.select()}};
+$("audClick").onchange=()=>{const x=audGet();x.click=$("audClick").checked;audSave(x)};
 $("audKey").onchange=()=>{const x=audGet();x.key=$("audKey").value;audSave(x)};
 $("audPause").onchange=()=>{const x=audGet();x.pause=Math.max(100,Math.min(3000,parseInt($("audPause").value)||350));$("audPause").value=x.pause;audSave(x)};
 
