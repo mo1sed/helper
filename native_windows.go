@@ -5,7 +5,10 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -775,13 +778,29 @@ func clickAt(p point) {
 	pMouseEvent.Call(0x0004, 0, 0, 0, 0) // LEFTUP
 }
 
-func sendIns(ins ...input) {
-	pSendInput.Call(uintptr(len(ins)), uintptr(unsafe.Pointer(&ins[0])), unsafe.Sizeof(ins[0]))
+func sendIns(ins ...input) uintptr {
+	n, _, _ := pSendInput.Call(uintptr(len(ins)), uintptr(unsafe.Pointer(&ins[0])), unsafe.Sizeof(ins[0]))
+	return n
+}
+
+// audLog keeps a short trace next to the data file, so a macro that does nothing can be diagnosed.
+func audLog(format string, a ...any) {
+	p := filepath.Join(filepath.Dir(dataPath), "vicedolls-audience.log")
+	if fi, err := os.Stat(p); err == nil && fi.Size() > 60000 {
+		os.Remove(p)
+	}
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, time.Now().Format("15:04:05.000")+" "+format+"\n", a...)
 }
 
 // runAudience replays the macro in the window that had focus. It stops at once if Esc is pressed
 // or the focus moves to another window, so keys never land somewhere unintended.
 func runAudience(target uintptr, ap audPick) {
+	audLog("start: %d steps, click=%v wait=%d target=%x", len(ap.steps), ap.click, ap.wait, target)
 	time.Sleep(200 * time.Millisecond)
 	releaseModifiers()
 	var prevText string
@@ -796,10 +815,11 @@ func runAudience(target uintptr, ap audPick) {
 		pMessageBeep.Call(0x40)
 		lb := func() bool { st, _, _ := pGetAsyncKeyState.Call(0x01); return st&0x8000 != 0 }
 		esc := func() bool { st, _, _ := pGetAsyncKeyState.Call(0x1B); return st&0x8000 != 0 }
-		deadline := time.Now().Add(20 * time.Second)
+		deadline := time.Now().Add(8 * time.Second)
 		for lb() && time.Now().Before(deadline) { // the click that picked the menu item
 			time.Sleep(10 * time.Millisecond)
 		}
+		audLog("armed, waiting for your click")
 		clicked := false
 		for time.Now().Before(deadline) && !esc() {
 			if lb() {
@@ -808,15 +828,23 @@ func runAudience(target uintptr, ap audPick) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		if !clicked {
+		if esc() {
+			audLog("cancelled by Esc")
 			pMessageBeep.Call(0x30)
 			return
 		}
-		for lb() {
+		if !clicked {
+			// the click was not detected (or took too long): carry on anyway, the field is most likely open
+			audLog("no click seen within 8 s, carrying on")
+		} else {
+			audLog("click seen")
+		}
+		for clicked && lb() {
 			time.Sleep(10 * time.Millisecond)
 		}
 		time.Sleep(80 * time.Millisecond)
 		target, _, _ = pGetForegroundWindow.Call()
+		audLog("waiting %d ms, target now %x", ap.wait, target)
 		time.Sleep(time.Duration(ap.wait) * time.Millisecond) // let the list open and load
 	}
 	aborted := func() bool {
@@ -829,6 +857,8 @@ func runAudience(target uintptr, ap audPick) {
 	stopped := false
 	for _, st := range ap.steps {
 		if aborted() {
+			cur, _, _ := pGetForegroundWindow.Call()
+			audLog("aborted: esc or focus changed (now %x, expected %x)", cur, target)
 			stopped = true
 			break
 		}
@@ -842,7 +872,7 @@ func runAudience(target uintptr, ap audPick) {
 		case "ctrl":
 			sendIns(key(vkControl, false), key(st.VK, false), key(st.VK, true), key(vkControl, true))
 		case "key":
-			sendIns(key(st.VK, false), key(st.VK, true))
+			audLog("key %x -> sent %d", st.VK, sendIns(key(st.VK, false), key(st.VK, true)))
 		case "wait":
 			time.Sleep(time.Duration(st.Ms) * time.Millisecond)
 		}
@@ -854,6 +884,7 @@ func runAudience(target uintptr, ap audPick) {
 		time.Sleep(300 * time.Millisecond)
 		setClipboard(prevText)
 	}
+	audLog("finished, stopped=%v", stopped)
 	if stopped {
 		pMessageBeep.Call(0x30) // warning: stopped early
 	} else {
