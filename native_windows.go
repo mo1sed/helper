@@ -810,7 +810,7 @@ func audLog(format string, a ...any) {
 // runAudience replays the macro in the window that had focus. It stops at once if Esc is pressed
 // or the focus moves to another window, so keys never land somewhere unintended.
 func runAudience(target uintptr, ap audPick) {
-	audLog("start: %d steps, click=%v wait=%d target=%x", len(ap.steps), ap.click, ap.wait, target)
+	audLog("v%s start: %d steps, click=%v wait=%d target=%x", appVersion, len(ap.steps), ap.click, ap.wait, target)
 	time.Sleep(200 * time.Millisecond)
 	releaseModifiers()
 	var prevText string
