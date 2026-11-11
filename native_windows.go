@@ -791,7 +791,32 @@ func runAudience(target uintptr, ap audPick) {
 		pCloseClipboard.Call()
 	}
 	if ap.click {
-		clickAt(ap.at)
+		// Armed: wait for the user's own left click (into the list field). A real click gives the
+		// picker real focus, exactly as when the keys are pressed by hand. Esc or 20 s cancels.
+		pMessageBeep.Call(0x40)
+		lb := func() bool { st, _, _ := pGetAsyncKeyState.Call(0x01); return st&0x8000 != 0 }
+		esc := func() bool { st, _, _ := pGetAsyncKeyState.Call(0x1B); return st&0x8000 != 0 }
+		deadline := time.Now().Add(20 * time.Second)
+		for lb() && time.Now().Before(deadline) { // the click that picked the menu item
+			time.Sleep(10 * time.Millisecond)
+		}
+		clicked := false
+		for time.Now().Before(deadline) && !esc() {
+			if lb() {
+				clicked = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !clicked {
+			pMessageBeep.Call(0x30)
+			return
+		}
+		for lb() {
+			time.Sleep(10 * time.Millisecond)
+		}
+		time.Sleep(80 * time.Millisecond)
+		target, _, _ = pGetForegroundWindow.Call()
 		time.Sleep(time.Duration(ap.wait) * time.Millisecond) // let the list open and load
 	}
 	aborted := func() bool {

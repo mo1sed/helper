@@ -141,12 +141,22 @@ func sendKey(_ code: CGKeyCode, cmd: Bool = false) {
 func runAudience(_ info: AudInfo) {
     DispatchQueue.global().async {
         Thread.sleep(forTimeInterval: 0.3)
-        if info.click { // the picker closes when our menu takes focus: click where the menu was opened to reopen it
-            let src = CGEventSource(stateID: .combinedSessionState)
-            for t in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
-                CGEvent(mouseEventSource: src, mouseType: t, mouseCursorPosition: info.at, mouseButton: .left)?.post(tap: .cghidEventTap)
+        if info.click {
+            // Armed: wait for the user's own left click into the list field (real click = real focus).
+            // Esc or 20 s cancels.
+            DispatchQueue.main.async { NSSound(named: "Glass")?.play() }
+            func lb() -> Bool { CGEventSource.buttonState(.combinedSessionState, button: .left) }
+            func esc() -> Bool { CGEventSource.keyState(.combinedSessionState, key: 53) }
+            let deadline = Date().addingTimeInterval(20)
+            while lb() && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+            var clicked = false
+            while Date() < deadline && !esc() {
+                if lb() { clicked = true; break }
+                Thread.sleep(forTimeInterval: 0.01)
             }
-            Thread.sleep(forTimeInterval: Double(info.wait) / 1000.0)
+            if !clicked { DispatchQueue.main.async { NSSound(named: "Basso")?.play() }; return }
+            while lb() { Thread.sleep(forTimeInterval: 0.01) }
+            Thread.sleep(forTimeInterval: 0.08 + Double(info.wait) / 1000.0)
         }
         let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let pb = NSPasteboard.general

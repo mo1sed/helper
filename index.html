@@ -566,14 +566,14 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
 <div class="modal" id="audModal" hidden role="dialog" aria-modal="true" aria-labelledby="audTitle">
   <div class="mbox" style="width:min(640px,100%)">
     <div class="mhd"><h2 id="audTitle">🎯 Аудитория для рассылок</h2><button class="btn small ghost" id="audClose" type="button">Закрыть</button></div>
-    <div class="hint">Впиши названия папок так, как они называются в выборе аудитории (по одной в строке). Потом открой меню (Ctrl + правый клик) прямо над полем выбора папок, например «Click here and select lists to exclude», → «🎯 Не отправлять» → выбери пресет. Приложение само кликнет в это поле и откроет список. Приложение само вобьёт названия и отметит папки. Остановить можно клавишей Esc. «Отправить» приложение не нажимает.</div>
+    <div class="hint">Впиши названия папок так, как они называются в выборе аудитории (по одной в строке). Потом: открой меню (Ctrl + правый клик) в любом месте → «🎯 Не отправлять» → выбери пресет. Прозвучит сигнал. После него сам кликни в поле выбора папок («Click here and select lists to exclude»): список откроется, приложение подождёт загрузку и нажмёт клавиши. Приложение само вобьёт названия и отметит папки. Остановить можно клавишей Esc. «Отправить» приложение не нажимает.</div>
     <div class="prof-list" id="audList"></div>
     <div class="prof-add"><button class="btn small primary" id="audAdd" type="button">+ Новый пресет</button></div>
     <div class="aud-set">
       <label>В режиме названий отмечать папку клавишей
         <select id="audKey"><option value="down_enter">↓ и Enter</option><option value="enter">Только Enter</option><option value="space">Пробел</option><option value="tab">Tab</option></select></label>
       <label>Пауза, мс <input type="number" id="audPause" min="100" max="3000" step="50"></label>
-      <label class="qp-show"><input type="checkbox" id="audClick"><span>Сначала кликнуть туда, где открыл меню</span></label>
+      <label class="qp-show"><input type="checkbox" id="audClick"><span>Ждать моего клика в поле (рекомендуется)</span></label>
       <label>Ждать загрузку списка, мс <input type="number" id="audWait" min="200" max="10000" step="100"></label>
     </div>
     <div class="hint">Работает в Windows через меню по Ctrl. Если папки не отмечаются, смени клавишу или увеличь паузу.</div>
