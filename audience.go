@@ -23,10 +23,11 @@ type audPreset struct {
 
 type audConfig struct {
 	Presets []audPreset `json:"presets"`
-	Key     string      `json:"key"`   // how a found folder is ticked: enter | down_enter | space | tab
-	Pause   int         `json:"pause"` // ms between actions
-	Wait    int         `json:"wait"`  // ms to wait after that click, so the list has time to load (default 1500)
-	Click   *bool       `json:"click"` // click where the menu was opened before replaying (default on)
+	Key     string      `json:"key"`    // how a found folder is ticked: enter | down_enter | space | tab
+	Pause   int         `json:"pause"`  // ms between actions
+	Wait    int         `json:"wait"`   // ms to wait after that click, so the list has time to load (default 1500)
+	MPause  *int        `json:"mpause"` // macro only: fixed ms between keys, recorded waits ignored (nil = as recorded)
+	Click   *bool       `json:"click"`  // click where the menu was opened before replaying (default on)
 }
 
 func readAudience() audConfig {
@@ -65,12 +66,25 @@ var macroKeys = map[string]uint16{"down": vkDown, "up": vkUp, "enter": vkReturn,
 
 // macroSteps turns recorded tokens ("down", "enter", "wait:300" ...) into steps. Between two keys
 // without an explicit wait a short default pause is used, so slow pickers keep up.
-func macroSteps(tokens []string, pause int) []audStep {
+func macroSteps(tokens []string, pause int, mpause *int) []audStep {
 	p := audPause(pause) / 3
+	fixed := mpause != nil
+	if fixed {
+		p = *mpause
+		if p < 0 {
+			p = 0
+		}
+		if p > 2000 {
+			p = 2000
+		}
+	}
 	var st []audStep
 	for _, t := range tokens {
 		t = strings.ToLower(strings.TrimSpace(t))
 		if strings.HasPrefix(t, "wait:") {
+			if fixed {
+				continue
+			}
 			ms := 0
 			for _, c := range t[5:] {
 				if c < '0' || c > '9' {
@@ -88,19 +102,26 @@ func macroSteps(tokens []string, pause int) []audStep {
 			continue
 		}
 		if vk, ok := macroKeys[t]; ok {
-			st = append(st, audStep{Kind: "key", VK: vk}, audStep{Kind: "wait", Ms: p})
+			hold := p
+			if hold < 1 {
+				hold = 1
+			}
+			st = append(st, audStep{Kind: "key", VK: vk, Ms: hold})
+			if p > 0 {
+				st = append(st, audStep{Kind: "wait", Ms: p})
+			}
 		}
 	}
 	return st
 }
 
 // stepsFor builds the macro for one preset and list kind.
-func (p audPreset) stepsFor(kind string, key string, pause int) ([]audStep, int) {
+func (p audPreset) stepsFor(kind string, key string, pause int, mpause *int) ([]audStep, int) {
 	if p.Mode == "macro" {
 		if kind == "send" {
 			return nil, 0
 		}
-		return macroSteps(p.Macro, pause), len(p.Macro)
+		return macroSteps(p.Macro, pause, mpause), len(p.Macro)
 	}
 	list := p.Skip
 	if kind == "send" {

@@ -573,6 +573,7 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
       <label>В режиме названий отмечать папку клавишей
         <select id="audKey"><option value="down_enter">↓ и Enter</option><option value="enter">Только Enter</option><option value="space">Пробел</option><option value="tab">Tab</option></select></label>
       <label>Пауза, мс <input type="number" id="audPause" min="100" max="3000" step="50"></label>
+      <label>Скорость макроса, мс между клавишами <input type="number" id="audMPause" min="0" max="2000" step="1" placeholder="как записано"></label>
       <label class="qp-show"><input type="checkbox" id="audClick"><span>Ждать моего клика в поле (рекомендуется)</span></label>
       <label>Ждать загрузку списка, мс <input type="number" id="audWait" min="200" max="10000" step="100"></label>
     </div>
@@ -1808,7 +1809,7 @@ function renderProfiles(){
   }
 }
 /* ---------- audience presets (folder names ticked by the Ctrl menu macro) ---------- */
-const audGet=()=>{const a=S.audience||{};return{presets:(a.presets||[]).map(p=>({...p})),key:a.key||"down_enter",pause:a.pause||350,click:a.click!==false,wait:a.wait||1500}};
+const audGet=()=>{const a=S.audience||{};return{presets:(a.presets||[]).map(p=>({...p})),key:a.key||"down_enter",pause:a.pause||350,click:a.click!==false,wait:a.wait||1500,...(a.mpause!=null?{mpause:a.mpause}:{})}};
 let audRecSupported=null,audRecTimer=null,audRecFor=null;
 const audTokTxt=t=>({down:"↓",up:"↑",enter:"Enter",space:"Пробел",tab:"Tab"}[t]||(t.startsWith("wait:")?"⏱"+t.slice(5):t));
 const audRec=async a=>{try{const r=await fetch("/api/audrec",{method:"POST",body:JSON.stringify({action:a})});return await r.json()}catch(_){return{supported:false}}};
@@ -1819,7 +1820,7 @@ function audFinishRec(id,r){clearInterval(audRecTimer);audRecFor=null;
   renderAudience()}
 function renderAudience(){
   const a=audGet(),box=$("audList");box.textContent="";
-  $("audKey").value=a.key;$("audPause").value=a.pause;$("audClick").checked=a.click;$("audWait").value=a.wait;
+  $("audKey").value=a.key;$("audPause").value=a.pause;$("audClick").checked=a.click;$("audWait").value=a.wait;$("audMPause").value=(a.mpause==null?"":a.mpause);
   if(!a.presets.length){const h=document.createElement("div");h.className="hint";h.textContent="Пока пусто. Нажми «+ Новый пресет», например по имени модели.";box.appendChild(h)}
   for(const p of a.presets){
     const c=document.createElement("div");c.className="aud-card";c.dataset.id=p.id;
@@ -1876,6 +1877,7 @@ $("audAdd").onclick=()=>{const x=audGet();x.presets.push({id:"a"+Date.now().toSt
 $("audWait").onchange=()=>{const x=audGet();x.wait=Math.max(200,Math.min(10000,parseInt($("audWait").value)||1500));$("audWait").value=x.wait;audSave(x)};
 $("audClick").onchange=()=>{const x=audGet();x.click=$("audClick").checked;audSave(x)};
 $("audKey").onchange=()=>{const x=audGet();x.key=$("audKey").value;audSave(x)};
+$("audMPause").onchange=()=>{const x=audGet();const v=$("audMPause").value.trim();if(v===""){delete x.mpause}else{x.mpause=Math.max(0,Math.min(2000,parseInt(v)||0));$("audMPause").value=x.mpause}audSave(x)};
 $("audPause").onchange=()=>{const x=audGet();x.pause=Math.max(100,Math.min(3000,parseInt($("audPause").value)||350));$("audPause").value=x.pause;audSave(x)};
 
 $("profBtn").onclick=()=>{renderProfiles();$("profModal").hidden=false};
