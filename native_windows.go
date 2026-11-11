@@ -723,11 +723,20 @@ func setClipboard(text string) bool {
 	return r != 0
 }
 
+// key builds a keyboard event that looks like a real key press: with the hardware scan code and,
+// for arrows and the like, the "extended key" flag. Browsers/Electron read these; events with only
+// a virtual-key code are ignored by many pickers.
 func key(vk uint16, up bool) input {
 	in := input{Type: 1}
 	in.Ki.Vk = vk
+	sc, _, _ := pMapVirtualKeyW.Call(uintptr(vk), 0) // MAPVK_VK_TO_VSC
+	in.Ki.Scan = uint16(sc)
+	switch vk {
+	case 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E: // PgUp PgDn End Home arrows Ins Del
+		in.Ki.Flags |= 1 // KEYEVENTF_EXTENDEDKEY
+	}
 	if up {
-		in.Ki.Flags = 2 // KEYEVENTF_KEYUP
+		in.Ki.Flags |= 2 // KEYEVENTF_KEYUP
 	}
 	return in
 }
@@ -765,9 +774,10 @@ type audPick struct {
 var audItems []audPick
 
 var (
-	pMessageBeep  = user32.NewProc("MessageBeep")
-	pSetCursorPos = user32.NewProc("SetCursorPos")
-	pMouseEvent   = user32.NewProc("mouse_event")
+	pMessageBeep    = user32.NewProc("MessageBeep")
+	pMapVirtualKeyW = user32.NewProc("MapVirtualKeyW")
+	pSetCursorPos   = user32.NewProc("SetCursorPos")
+	pMouseEvent     = user32.NewProc("mouse_event")
 )
 
 // clickAt moves the pointer to p and does a left click.
@@ -872,7 +882,10 @@ func runAudience(target uintptr, ap audPick) {
 		case "ctrl":
 			sendIns(key(vkControl, false), key(st.VK, false), key(st.VK, true), key(vkControl, true))
 		case "key":
-			audLog("key %x -> sent %d", st.VK, sendIns(key(st.VK, false), key(st.VK, true)))
+			n1 := sendIns(key(st.VK, false))
+			time.Sleep(35 * time.Millisecond) // a real key press is held for a moment
+			n2 := sendIns(key(st.VK, true))
+			audLog("key %x -> sent %d+%d", st.VK, n1, n2)
 		case "wait":
 			time.Sleep(time.Duration(st.Ms) * time.Millisecond)
 		}
