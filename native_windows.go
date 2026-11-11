@@ -535,7 +535,9 @@ func showPasteMenu(onlyFolder, onlySub string) {
 		go openWindow(true)
 	case cmd >= cmdAudBase && int(cmd-cmdAudBase) < len(audItems):
 		ap := audItems[cmd-cmdAudBase]
-		ap.click = readAudience().Click == nil || *readAudience().Click
+		ac := readAudience()
+		ap.click = ac.Click == nil || *ac.Click
+		ap.wait = audWait(ac.Wait)
 		ap.at = origin
 		focus(prev)
 		go runAudience(prev, ap)
@@ -754,6 +756,7 @@ type audPick struct {
 	steps []audStep
 	click bool  // click where the menu was opened first (re-focuses the picker, which closes when our menu takes focus)
 	at    point // that place
+	wait  int   // ms to wait after the click
 }
 
 var audItems []audPick
@@ -789,7 +792,7 @@ func runAudience(target uintptr, ap audPick) {
 	}
 	if ap.click {
 		clickAt(ap.at)
-		time.Sleep(600 * time.Millisecond) // let the list open
+		time.Sleep(time.Duration(ap.wait) * time.Millisecond) // let the list open and load
 	}
 	aborted := func() bool {
 		if st, _, _ := pGetAsyncKeyState.Call(0x1B); st&0x8000 != 0 {

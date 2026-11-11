@@ -574,6 +574,7 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
         <select id="audKey"><option value="down_enter">↓ и Enter</option><option value="enter">Только Enter</option><option value="space">Пробел</option><option value="tab">Tab</option></select></label>
       <label>Пауза, мс <input type="number" id="audPause" min="100" max="3000" step="50"></label>
       <label class="qp-show"><input type="checkbox" id="audClick"><span>Сначала кликнуть туда, где открыл меню</span></label>
+      <label>Ждать загрузку списка, мс <input type="number" id="audWait" min="200" max="10000" step="100"></label>
     </div>
     <div class="hint">Работает в Windows через меню по Ctrl. Если папки не отмечаются, смени клавишу или увеличь паузу.</div>
   </div>
@@ -1807,7 +1808,7 @@ function renderProfiles(){
   }
 }
 /* ---------- audience presets (folder names ticked by the Ctrl menu macro) ---------- */
-const audGet=()=>{const a=S.audience||{};return{presets:(a.presets||[]).map(p=>({...p})),key:a.key||"down_enter",pause:a.pause||350,click:a.click!==false}};
+const audGet=()=>{const a=S.audience||{};return{presets:(a.presets||[]).map(p=>({...p})),key:a.key||"down_enter",pause:a.pause||350,click:a.click!==false,wait:a.wait||1500}};
 let audRecSupported=null,audRecTimer=null,audRecFor=null;
 const audTokTxt=t=>({down:"↓",up:"↑",enter:"Enter",space:"Пробел",tab:"Tab"}[t]||(t.startsWith("wait:")?"⏱"+t.slice(5):t));
 const audRec=async a=>{try{const r=await fetch("/api/audrec",{method:"POST",body:JSON.stringify({action:a})});return await r.json()}catch(_){return{supported:false}}};
@@ -1818,7 +1819,7 @@ function audFinishRec(id,r){clearInterval(audRecTimer);audRecFor=null;
   renderAudience()}
 function renderAudience(){
   const a=audGet(),box=$("audList");box.textContent="";
-  $("audKey").value=a.key;$("audPause").value=a.pause;$("audClick").checked=a.click;
+  $("audKey").value=a.key;$("audPause").value=a.pause;$("audClick").checked=a.click;$("audWait").value=a.wait;
   if(!a.presets.length){const h=document.createElement("div");h.className="hint";h.textContent="Пока пусто. Нажми «+ Новый пресет», например по имени модели.";box.appendChild(h)}
   for(const p of a.presets){
     const c=document.createElement("div");c.className="aud-card";c.dataset.id=p.id;
@@ -1872,6 +1873,7 @@ $("audClose").onclick=()=>{$("audModal").hidden=true};
 $("audModal").addEventListener("mousedown",e=>{if(e.target===$("audModal"))$("audModal").hidden=true});
 $("audAdd").onclick=()=>{const x=audGet();x.presets.push({id:"a"+Date.now().toString(36),name:"Новый пресет",skip:[],send:[]});audSave(x);renderAudience();
   const n=$("audList").querySelector(".aud-card:last-child .aname");if(n){n.focus();n.select()}};
+$("audWait").onchange=()=>{const x=audGet();x.wait=Math.max(200,Math.min(10000,parseInt($("audWait").value)||1500));$("audWait").value=x.wait;audSave(x)};
 $("audClick").onchange=()=>{const x=audGet();x.click=$("audClick").checked;audSave(x)};
 $("audKey").onchange=()=>{const x=audGet();x.key=$("audKey").value;audSave(x)};
 $("audPause").onchange=()=>{const x=audGet();x.pause=Math.max(100,Math.min(3000,parseInt($("audPause").value)||350));$("audPause").value=x.pause;audSave(x)};

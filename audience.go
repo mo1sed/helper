@@ -25,6 +25,7 @@ type audConfig struct {
 	Presets []audPreset `json:"presets"`
 	Key     string      `json:"key"`   // how a found folder is ticked: enter | down_enter | space | tab
 	Pause   int         `json:"pause"` // ms between actions
+	Wait    int         `json:"wait"`  // ms to wait after that click, so the list has time to load (default 1500)
 	Click   *bool       `json:"click"` // click where the menu was opened before replaying (default on)
 }
 
@@ -121,6 +122,16 @@ func audRecState() (bool, []string) {
 	recMu.Lock()
 	defer recMu.Unlock()
 	return recActive, append([]string(nil), recTokens...)
+}
+
+func audWait(w int) int {
+	if w <= 0 {
+		return 1500
+	}
+	if w > 10000 {
+		return 10000
+	}
+	return w
 }
 
 func audPause(p int) int {

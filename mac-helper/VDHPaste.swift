@@ -91,10 +91,10 @@ func markUsed(_ id: String) {
 
 struct AudPreset { let name: String; let skip: [String]; let send: [String]; let macro: [String]; let isMacro: Bool }
 
-func loadAudience() -> (presets: [AudPreset], key: String, pause: Int, click: Bool) {
+func loadAudience() -> (presets: [AudPreset], key: String, pause: Int, click: Bool, wait: Int) {
     guard let data = FileManager.default.contents(atPath: DATA_PATH),
           let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-          let au = root["audience"] as? [String: Any] else { return ([], "down_enter", 350, true) }
+          let au = root["audience"] as? [String: Any] else { return ([], "down_enter", 350, true, 1500) }
     func names(_ v: Any?) -> [String] {
         var out: [String] = []
         for x in (v as? [Any]) ?? [] {
@@ -113,12 +113,15 @@ func loadAudience() -> (presets: [AudPreset], key: String, pause: Int, click: Bo
     var pause = (au["pause"] as? NSNumber)?.intValue ?? 350
     if pause < 100 { pause = 350 }
     if pause > 3000 { pause = 3000 }
-    return (presets, key, pause, (au["click"] as? Bool) ?? true)
+    var wait = (au["wait"] as? NSNumber)?.intValue ?? 1500
+    if wait <= 0 { wait = 1500 }
+    if wait > 10000 { wait = 10000 }
+    return (presets, key, pause, (au["click"] as? Bool) ?? true, wait)
 }
 
 final class AudInfo: NSObject {
     let names: [String]; let macro: [String]; let key: String; let pause: Int
-    var click = true; var at = CGPoint.zero
+    var click = true; var at = CGPoint.zero; var wait = 1500
     init(_ n: [String], _ m: [String], _ k: String, _ p: Int) { names = n; macro = m; key = k; pause = p }
 }
 
@@ -143,7 +146,7 @@ func runAudience(_ info: AudInfo) {
             for t in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
                 CGEvent(mouseEventSource: src, mouseType: t, mouseCursorPosition: info.at, mouseButton: .left)?.post(tap: .cghidEventTap)
             }
-            Thread.sleep(forTimeInterval: 0.6)
+            Thread.sleep(forTimeInterval: Double(info.wait) / 1000.0)
         }
         let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let pb = NSPasteboard.general
@@ -297,7 +300,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     let it = NSMenuItem(title: "\(p.name) (\(p.isMacro ? "⌨ " : "")\(list.count))", action: #selector(pickAud(_:)), keyEquivalent: "")
                     it.target = self
                     let ai = p.isMacro ? AudInfo([], list, au.key, au.pause) : AudInfo(list, [], au.key, au.pause)
-                    ai.click = au.click && !forStatusBar; ai.at = origin
+                    ai.click = au.click && !forStatusBar; ai.at = origin; ai.wait = au.wait
                     it.representedObject = ai
                     sub.addItem(it)
                 }
