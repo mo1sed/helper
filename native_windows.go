@@ -109,6 +109,7 @@ const (
 	cmdQuit    = 2
 	cmdBase    = 1000
 	cmdAudBase = 40000
+	cmdEmoji   = 3
 )
 
 type point struct{ X, Y int32 }
@@ -526,6 +527,7 @@ func showPasteMenu(onlyFolder, onlySub string) {
 		}
 	}
 	addItem(menu, mfSeparator, 0, "")
+	addItem(menu, mfString, cmdEmoji, "✨ Добавить эмодзи в текст")
 	if libProfile != "" {
 		addItem(menu, mfGrayed, 0, "Профиль: "+label(libProfile))
 	}
@@ -536,6 +538,9 @@ func showPasteMenu(onlyFolder, onlySub string) {
 	switch {
 	case cmd == cmdOpen:
 		go openWindow(true)
+	case cmd == cmdEmoji:
+		focus(prev)
+		go runEmoji(prev)
 	case cmd >= cmdAudBase && int(cmd-cmdAudBase) < len(audItems):
 		ap := audItems[cmd-cmdAudBase]
 		ac := readAudience()
@@ -965,4 +970,65 @@ func audRecStop() {
 	recMu.Lock()
 	recActive = false
 	recMu.Unlock()
+}
+
+// runEmoji copies the text of the focused input (Ctrl+A, Ctrl+C), adds emoji and pastes it back.
+func runEmoji(target uintptr) {
+	time.Sleep(200 * time.Millisecond)
+	releaseModifiers()
+	var prevText string
+	var hadPrev bool
+	if openClip() {
+		prevText, hadPrev = readClipboard()
+		pCloseClipboard.Call()
+	}
+	restore := func() {
+		if hadPrev {
+			setClipboard(prevText)
+		}
+	}
+	const marker = "\u200b\u200bvdh-emoji-marker\u200b"
+	if !setClipboard(marker) {
+		return
+	}
+	sendIns(key(vkControl, false), key(vkSelAll, false), key(vkSelAll, true), key(vkControl, true))
+	time.Sleep(80 * time.Millisecond)
+	sendIns(key(vkControl, false), key(0x43, false), key(0x43, true), key(vkControl, true))
+	text := ""
+	for i := 0; i < 20; i++ { // up to ~1 s for the copy to land
+		time.Sleep(50 * time.Millisecond)
+		if openClip() {
+			t, ok := readClipboard()
+			pCloseClipboard.Call()
+			if ok && t != marker {
+				text = t
+				break
+			}
+		}
+	}
+	if strings.TrimSpace(text) == "" {
+		restore()
+		pMessageBeep.Call(0x30)
+		return
+	}
+	res, _, stopped := addEmoji(text, readEmojiDict())
+	if stopped || res == text {
+		restore()
+		pMessageBeep.Call(0x30) // nothing added (stop word or nothing to add): text left as it was
+		return
+	}
+	if !setClipboard(res) {
+		restore()
+		return
+	}
+	cur, _, _ := pGetForegroundWindow.Call()
+	if cur != target {
+		restore()
+		pMessageBeep.Call(0x30)
+		return
+	}
+	sendIns(key(vkControl, false), key(vkV, false), key(vkV, true), key(vkControl, true))
+	time.Sleep(300 * time.Millisecond)
+	restore()
+	pMessageBeep.Call(0x40)
 }

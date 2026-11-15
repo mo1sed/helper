@@ -28,7 +28,7 @@ var page []byte
 const addr = "127.0.0.1:47615"
 
 // appVersion is shown in the app; marker lets an update check it got a real build of this app.
-const appVersion = "4.20"
+const appVersion = "4.21"
 const marker = "VDH-APP-BUILD-MARKER-7f3a91"
 const url = "http://" + addr + "/"
 
@@ -92,14 +92,14 @@ func proxySupa(w http.ResponseWriter, r *http.Request) {
 }
 
 var (
-	mu       sync.Mutex
-	lastPing = time.Now()
-	byeAt    time.Time
-	dataPath string
-	browser  *exec.Cmd
-	bmu      sync.Mutex
-	exePath  string
-	dataRev  int // bumped when the data file is changed outside the page (quick paste)
+	mu         sync.Mutex
+	lastPing   = time.Now()
+	byeAt      time.Time
+	dataPath   string
+	browser    *exec.Cmd
+	bmu        sync.Mutex
+	exePath    string
+	dataRev    int    // bumped when the data file is changed outside the page (quick paste)
 	libProfile string // name of the active profile (only set when there is more than one)
 )
 
@@ -128,16 +128,16 @@ func quickPasteOn() bool {
 }
 
 type msg struct {
-	ID        string   `json:"id"`
-	Folder    string   `json:"folder"`
-	Sub       string   `json:"sub"`
-	Text      string   `json:"text"`
-	Label     string   `json:"label"`
-	Order     *float64 `json:"order"`
-	CreatedAt float64  `json:"createdAt"`
-	Hot       bool     `json:"hot"`
-	Uses       float64 `json:"uses"`
-	LastUsedAt float64 `json:"lastUsedAt"`
+	ID         string   `json:"id"`
+	Folder     string   `json:"folder"`
+	Sub        string   `json:"sub"`
+	Text       string   `json:"text"`
+	Label      string   `json:"label"`
+	Order      *float64 `json:"order"`
+	CreatedAt  float64  `json:"createdAt"`
+	Hot        bool     `json:"hot"`
+	Uses       float64  `json:"uses"`
+	LastUsedAt float64  `json:"lastUsedAt"`
 }
 type folder struct {
 	ID       string `json:"id"`
@@ -268,7 +268,6 @@ func keepUsage(incoming []byte) []byte {
 	dataRev++ // the window's copy is now behind; it reloads on its next ping
 	return out
 }
-
 
 // ---- safety copies: data must never be lost by a bug or a wrong click ----
 func backupDir() string {
@@ -699,6 +698,7 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"path": path})
 	})
 	http.HandleFunc("/api/audrec", handleAudRec)
+	http.HandleFunc("/api/emoji", handleEmoji)
 	http.HandleFunc("/api/hotkeys", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(hotkeyStatus())

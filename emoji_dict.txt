@@ -1,0 +1,127 @@
+# Словарь эмодзи: слова через запятую = эмодзи (берётся случайное из набора).
+# Звёздочка в конце слова = любое окончание (want* = want, wanted, wanting).
+# Строки с # и пустые игнорируются. Слова в скобках (PPV) приложение не трогает.
+# 1. ЖЕЛАНИЕ, ВОЗБУЖДЕНИЕ
+want*, wanna, need*, crave*, craving, desire* = 😈 🔥 🥵
+hot, so hot, burning, heat, warm* = 🥵 🔥
+horny, aroused, turned on, turn* on = 🥵 😈 💦
+wet, dripping, soaking = 💦 🥵
+hard, so hard, throbbing = 🔥 😈 🥵
+naughty, bad girl, dirty, filthy, nasty = 😈 😏
+tease*, teasing, tempt* = 😏 😈 💋
+sexy, seductive, sensual = 😍 🔥 💋
+desire, passion*, lust* = 🔥 😈
+tension, can't wait, cant wait = 🥵 😏
+fantasy, fantasies, imagine*, imagination, dream* = 😏 🤭 🔥
+dirty talk, whisper*, moan*, moaning = 😈 🥵 🔥
+shiver*, goosebumps, tremble* , trembling = 🥵 💦
+blush*, blushing = 🙈 😳 🥵
+shy = 🙈 🥺
+cum*, climax, orgasm*, finish* = 💦 🥵 😈
+squirt*, squirting = 💦 🥵
+explode, explod* = 💥 🔥
+
+
+# 2. ТЕЛО (только то, что обычно называешь в сообщениях)
+chest, boobs, tits, breasts, nipples = 😈 🥵 🍒
+pussy = 🍑 💦 😈
+ass, butt, booty = 🍑 😈
+body = 😍 🔥
+lips, mouth = 💋 😘
+tongue = 👅 😈
+legs, thighs = 🔥 😏
+skin = ✨ 🥵
+hands, fingers, touch*, touching = 😈 🥵 🔥
+eyes, look*, watch*, staring, see* you = 👀 😏 😈
+hair = 💕 ✨
+curves, figure = 😍 🔥
+neck = 💋 😈
+back = 😏 🔥
+
+
+# 3. КОНТЕНТ, ПРОДАЖА
+video*, vid, vids, clip* = 📹 🔥 😈
+photo*, pic*, picture* = 📸 😍 🔥
+set, bundle, collection = 🎁 🔥 😈
+new = ✨ 🔥
+exclusive, special, just for you, only for you = 💎 😈 💋
+bonus, gift, present, surprise = 🎁 🎀 😍
+discount, sale, deal, offer, cheap* = 💸 🎁 🔥
+price, cost, pay*, paid, buy*, bought, purchase* = 💸 😘 💕
+open*, unlock*, check it out, take a look = 🔥 😈 👀
+preview, teaser, peek, sneak peek, little piece = 😏 👀 🔥
+camera, cam, filming, recorded, record* = 📹 🎥
+custom, request* = 💌 😈
+live, stream* = 🔴 🔥
+support* = 💕 🥰 🙏
+treat* = 🎁 😘 💋
+sold out, last chance, hurry, don't miss, dont miss, limited = ⏰ 🔥
+free = 🎁 😍
+
+
+# 4. ЭМОЦИИ, ОБЩЕНИЕ
+love*, adore* = 😍 💕 🥰
+like, enjoy* = 😍 😘 🔥
+happy, glad, so happy = 🥰 💕 😊
+miss*, missing = 🥺 💕 😘
+thank*, thanks = 🥰 💕 😘
+please, pls = 🥺 🙏
+sorry = 🥺 🙏
+baby, babe, honey, love, sweetheart, darling = 😘 💕 😍
+daddy = 😈 😘
+master, sir = 😈 🔥
+good boy = 😈 😏
+beautiful, gorgeous, pretty, cute = 😍 🥰 😘
+amazing, awesome, perfect, wonderful, incredible = 😍 🔥 ✨
+wow = 😍 😏 🔥
+omg, oh my = 😳 🙈 😍
+haha, lol, funny, laugh* = 😂 😏 🤭
+kiss*, mwah = 💋 😘
+hug*, cuddle*, cuddling = 🤗 💕 🥰
+smile, smiling = 😊 😘
+sweet, sweetie = 🥰 💕
+crazy, wild = 😈 🔥 🤪
+surprised, shocked = 😳 🙈
+curious = 👀 😏
+tell me, tell me what = 😏 💋 😈
+what do you think, what would you do = 😏 😈 💋
+good morning, morning = ☀️ 😘 💕
+good night, goodnight, night = 🌙 😘 💋
+hello, hi, hey = 😘 💕 😊
+bye, see you, talk soon = 😘 💋
+dinner, lunch, breakfast, eat*, food = 🍽️ 😋
+drink*, wine, coffee = 🍷 ☕ 😘
+work*, busy, working = 💻 😅 🥺
+gym, workout, training = 💪 🔥 😏
+shower, bath = 🚿 💦 😏
+bed, bedroom = 🛏️ 😈 🥵
+tonight, today = 🌙 🔥 😈
+alone = 🥺 😏 😈
+lonely = 🥺 💔
+sleep*, tired = 😴 🥺 😘
+
+
+# 5. ДЕЙСТВИЯ
+ride, riding = 🥵 🔥 😈
+spread*, spreading = 😈 💦
+show*, showing, reveal* = 😈 🔥 😏
+play*, playing, toy, toys = 😈 🔥 😏
+touch myself, touching myself = 🥵 💦
+suck*, lick* = 😈 💦 👅
+kneel*, beg*, obey* = 😈 🔥
+kiss me, kissing me = 💋 😘
+grab*, hold*, pull* = 😈 🔥
+slowly, slow = 😏 🥵
+deep, deeper = 🔥 😈
+harder, faster = 🔥 🥵
+last, how long can you last = 😏 🔥 🥵
+lose control = 😈 🔥
+can't stop, cant stop, addicted = 😈 🔥 😍
+make you = 😈 😏
+
+
+# 6. ЧИСЛА, ДЕНЬГИ
+$, dollar*, usd = 💸
+vip, king, queen = 👑
+best, favorite, favourite, number one = 👑 🔥 😍
+top fan, my fan = 👑 💕
