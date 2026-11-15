@@ -293,7 +293,10 @@ func wndProc(h, m, wParam, lParam uintptr) uintptr {
 		hkMu.Lock()
 		t, ok := hkTargets[wParam]
 		hkMu.Unlock()
-		if ok {
+		if ok && t.folder == "__emoji" {
+			fg, _, _ := pGetForegroundWindow.Call()
+			go runEmoji(fg)
+		} else if ok {
 			showPasteMenu(t.folder, t.sub)
 		}
 		return 0
@@ -654,6 +657,7 @@ func rebindHotkeys() {
 		hkTargets[id] = t
 		id++
 	}
+	bind(readEmojiHotkey(), hkTarget{"__emoji", ""})
 	for _, f := range folders {
 		bind(f.Hotkey, hkTarget{f.ID, ""})
 		for _, s := range f.Subs {
@@ -991,20 +995,26 @@ func runEmoji(target uintptr) {
 	if !setClipboard(marker) {
 		return
 	}
-	sendIns(key(vkControl, false), key(vkSelAll, false), key(vkSelAll, true), key(vkControl, true))
-	time.Sleep(80 * time.Millisecond)
-	sendIns(key(vkControl, false), key(0x43, false), key(0x43, true), key(vkControl, true))
-	text := ""
-	for i := 0; i < 20; i++ { // up to ~1 s for the copy to land
-		time.Sleep(50 * time.Millisecond)
-		if openClip() {
-			t, ok := readClipboard()
-			pCloseClipboard.Call()
-			if ok && t != marker {
-				text = t
-				break
+	// take the selected text; with nothing selected, take the whole field
+	grab := func() string {
+		sendIns(key(vkControl, false), key(0x43, false), key(0x43, true), key(vkControl, true))
+		for i := 0; i < 10; i++ { // up to ~0.5 s for the copy to land
+			time.Sleep(50 * time.Millisecond)
+			if openClip() {
+				t, ok := readClipboard()
+				pCloseClipboard.Call()
+				if ok && t != marker {
+					return t
+				}
 			}
 		}
+		return ""
+	}
+	text := grab()
+	if strings.TrimSpace(text) == "" {
+		sendIns(key(vkControl, false), key(vkSelAll, false), key(vkSelAll, true), key(vkControl, true))
+		time.Sleep(80 * time.Millisecond)
+		text = grab()
 	}
 	if strings.TrimSpace(text) == "" {
 		restore()

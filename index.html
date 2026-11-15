@@ -568,6 +568,7 @@ select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid v
     <div class="mhd"><h2 id="emjTitle">✨ Словарь эмодзи</h2><button class="btn small ghost" id="emjClose" type="button">Закрыть</button></div>
     <div class="hint">Как пользоваться: напиши текст в поле на OnlyFans, нажми Ctrl + правая кнопка и выбери «✨ Добавить эмодзи в текст» (Windows). Эмодзи подставятся к подходящим словам. Если в тексте есть слова про школу, возраст или встречи, текст не меняется. Формат строки: <code>слова через запятую = эмодзи</code>, звёздочка = любое окончание.</div>
     <textarea id="emjDict" rows="14" spellcheck="false" style="width:100%;font-family:monospace;font-size:12px"></textarea>
+    <div class="prof-add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span>Горячая клавиша (выдели текст и нажми её):</span><select id="emjHkMod"></select><span>+</span><select id="emjHkKey"></select><button class="btn small" id="emjHkSave" type="button">Назначить</button><button class="btn small" id="emjHkDel" type="button">Убрать</button><span id="emjHkMsg" class="hint"></span></div>
     <div class="prof-add" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small primary" id="emjSave" type="button">Сохранить словарь</button><button class="btn small" id="emjReset" type="button">Вернуть стандартный</button><span id="emjMsg" class="hint"></span></div>
     <h3 style="margin:14px 0 6px">Проверка</h3>
     <textarea id="emjIn" rows="3" placeholder="Вставь сюда текст для проверки" style="width:100%"></textarea>
@@ -831,7 +832,7 @@ const HK_STD=new Set(["Ctrl+A","Ctrl+C","Ctrl+V","Ctrl+X","Ctrl+Z","Ctrl+Y","Ctr
 let hkStatus={},hkEditing=false,nativeOn=false,hkPick;
 function refreshHkStatus(){fetch("/api/hotkeys").then(r=>r.json()).then(d=>{hkStatus=d||{};if(!S.editing)render()}).catch(()=>{})}
 function hkTargetObj(cf,sb){return sb?cf.subs.find(x=>x.id===sb):cf}
-function allHotkeys(except){const out=new Map();for(const f of S.folders){if(f.hotkey&&f!==except)out.set(f.hotkey,f.name);for(const s of f.subs||[])if(s.hotkey&&s!==except)out.set(s.hotkey,f.name+" · "+s.name)}return out}
+function allHotkeys(except){const out=new Map();if(S.emoji&&S.emoji.hotkey&&except!=="emoji")out.set(S.emoji.hotkey,"✨ Эмодзи");for(const f of S.folders){if(f.hotkey&&f!==except)out.set(f.hotkey,f.name);for(const s of f.subs||[])if(s.hotkey&&s!==except)out.set(s.hotkey,f.name+" · "+s.name)}return out}
 function renderHotkey(cf,sb){
   const bar=$("hkbar");bar.textContent="";bar.hidden=!nativeOn||!cf.id;if(bar.hidden)return;
   // folder-level: show/hide this folder in the full Ctrl quick-paste menu
@@ -1828,11 +1829,21 @@ let emjDefault="";
 const emjApi=async b=>{try{const r=await fetch("/api/emoji",{method:"POST",body:JSON.stringify(b)});return await r.json()}catch(_){return null}};
 $("emjBtn").onclick=async()=>{
   const r=await emjApi({text:"",dict:""});if(r)emjDefault=r.default;
-  $("emjDict").value=(S.emoji&&S.emoji.dict)||emjDefault;$("emjMsg").textContent="";$("emjModal").hidden=false};
+  $("emjDict").value=(S.emoji&&S.emoji.dict)||emjDefault;emjHkFill();$("emjMsg").textContent="";$("emjModal").hidden=false};
+const emjHkFill=()=>{const hk=(S.emoji&&S.emoji.hotkey)||"";const [m0,k0]=hk?[hk.split("+").slice(0,-1).join("+"),hk.split("+").pop()]:["Alt","E"];
+  const ms=$("emjHkMod"),ks=$("emjHkKey");ms.innerHTML="";ks.innerHTML="";
+  for(const m of HK_MODS){const o=document.createElement("option");o.value=o.textContent=m;if(m===m0)o.selected=true;ms.appendChild(o)}
+  for(const k of HK_KEYS){const o=document.createElement("option");o.value=o.textContent=k;if(k===k0)o.selected=true;ks.appendChild(o)}
+  $("emjHkMsg").textContent=hk?"Сейчас: "+hk:"не задана"};
+$("emjHkSave").onclick=()=>{const v=$("emjHkMod").value+"+"+$("emjHkKey").value;const used=allHotkeys("emoji").get(v);
+  if(used){$("emjHkMsg").textContent="Уже занято: «"+used+"»";return}
+  S.emoji={...(S.emoji||{}),hotkey:v};S.store.setEmoji(S.emoji);$("emjHkMsg").textContent="Назначено: "+v+(HK_STD.has(v)?" (внимание: обычное сочетание перестанет работать)":"");
+  setTimeout(()=>fetch("/api/hotkeys").then(r=>r.json()).then(d=>{if(d&&d[v]==="busy")$("emjHkMsg").textContent="Занято другой программой, выбери другое"}).catch(()=>{}),1200)};
+$("emjHkDel").onclick=()=>{S.emoji={...(S.emoji||{})};delete S.emoji.hotkey;S.store.setEmoji(S.emoji);emjHkFill()};
 $("emjClose").onclick=()=>{$("emjModal").hidden=true};
 $("emjModal").addEventListener("mousedown",e=>{if(e.target===$("emjModal"))$("emjModal").hidden=true});
-$("emjSave").onclick=()=>{const v=$("emjDict").value;const same=v.trim()===emjDefault.trim();S.emoji={dict:same?"":v};S.store.setEmoji(S.emoji);$("emjMsg").textContent="Сохранено"};
-$("emjReset").onclick=()=>{$("emjDict").value=emjDefault;S.emoji={dict:""};S.store.setEmoji(S.emoji);$("emjMsg").textContent="Стандартный словарь"};
+$("emjSave").onclick=()=>{const v=$("emjDict").value;const same=v.trim()===emjDefault.trim();S.emoji={...(S.emoji||{}),dict:same?"":v};S.store.setEmoji(S.emoji);$("emjMsg").textContent="Сохранено"};
+$("emjReset").onclick=()=>{$("emjDict").value=emjDefault;S.emoji={...(S.emoji||{}),dict:""};S.store.setEmoji(S.emoji);$("emjMsg").textContent="Стандартный словарь"};
 $("emjTest").onclick=async()=>{const r=await emjApi({text:$("emjIn").value,dict:$("emjDict").value});
   $("emjOut").value=!r?"Ошибка":r.stopped?"Текст не изменён: в нём есть слова про школу, возраст или встречи":r.result};
 /* ---------- audience presets (folder names ticked by the Ctrl menu macro) ---------- */

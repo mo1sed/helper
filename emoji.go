@@ -132,7 +132,10 @@ func findWordSpan(s, w string) (int, int) {
 func findWord(s, w string) int { i, _ := findWordSpan(s, w); return i }
 
 var emojiStopWords = []string{"school*", "student*", "classmate*", "class", "classes", "teen*", "minor", "minors", "underage", "years old", "year old",
-	"real life", "irl", "meet", "meeting", "address", "hotel", "kid", "kids", "child", "children", "grade*"}
+	"real life", "irl", "meet", "meeting", "address", "hotel", "kid", "kids", "child", "children", "grade*",
+	"школ*", "ученик*", "учениц*", "студент*", "одноклассни*", "класс", "классе", "класса", "классу", "подросток", "подростк*",
+	"несовершеннолет*", "малолетк*", "школьниц*", "встреч*", "встретим*", "встретиться", "реальной жизни", "реальная жизнь",
+	"адрес*", "отель", "отеле", "ребёнок", "ребенок", "ребёнк*", "ребенк*", "дети", "детей", "детск*", "лолит*"}
 
 var protectedRe = regexp.MustCompile(`\([^)]*\)`)
 
@@ -316,9 +319,9 @@ func endingSet(core, term string) []string {
 	switch {
 	case strings.Contains(term, "?"):
 		return []string{"😏", "😈", "💋", "🔥"}
-	case has("set*", "video*", "bundle*", "open*", "price*", "ppv", "buy*", "unlock*"):
+	case has("set*", "video*", "bundle*", "open*", "price*", "ppv", "buy*", "unlock*", "сет", "сеты", "набор*", "видео", "откро*", "цен*", "купи*"):
 		return []string{"🔥", "💦", "😈", "🥵"}
-	case has("love*", "miss*", "thank*", "happy", "baby", "babe"):
+	case has("love*", "miss*", "thank*", "happy", "baby", "babe", "люблю", "скучаю", "спасибо", "рада", "рад", "малыш*", "милый", "милая"):
 		return []string{"💕", "😘", "🥰"}
 	case strings.Contains(term, "!"):
 		return []string{"🔥", "😍", "😘"}
@@ -339,4 +342,17 @@ func handleEmoji(w http.ResponseWriter, r *http.Request) {
 	}
 	res, n, stopped := addEmoji(in.Text, d)
 	json.NewEncoder(w).Encode(map[string]interface{}{"result": res, "added": n, "stopped": stopped, "default": defaultEmojiDict})
+}
+
+func readEmojiHotkey() string {
+	mu.Lock()
+	b, _ := os.ReadFile(dataPath)
+	mu.Unlock()
+	var d struct {
+		Emoji struct {
+			Hotkey string `json:"hotkey"`
+		} `json:"emoji"`
+	}
+	json.Unmarshal(b, &d)
+	return strings.TrimSpace(d.Emoji.Hotkey)
 }
