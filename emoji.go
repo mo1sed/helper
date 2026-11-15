@@ -19,12 +19,18 @@ var defaultEmojiDict string
 type emojiEntry struct {
 	words  []string // lower-case, stem marked by trailing *
 	emojis []string
+	prio   int // 1 = after a "#priority" line: wins over general words
 }
 
 func parseEmojiDict(text string) []emojiEntry {
 	var out []emojiEntry
+	prio := 0
 	for _, ln := range strings.Split(text, "\n") {
 		ln = strings.TrimSpace(ln)
+		if strings.EqualFold(ln, "#priority") {
+			prio = 1
+			continue
+		}
 		if ln == "" || strings.HasPrefix(ln, "#") {
 			continue
 		}
@@ -32,7 +38,7 @@ func parseEmojiDict(text string) []emojiEntry {
 		if i < 0 {
 			continue
 		}
-		var e emojiEntry
+		e := emojiEntry{prio: prio}
 		for _, w := range strings.Split(ln[:i], ",") {
 			w = strings.ToLower(strings.TrimSpace(w))
 			if w != "" {
@@ -226,15 +232,15 @@ func decorateChunk(ch string, dict []emojiEntry, used map[string]bool, last *str
 	var set []string
 	if room {
 		low := strings.ToLower(core)
-		best, bestLen := -1, 0
+		best, bestLen, bestPrio := -1, 0, 0
 		for _, e := range dict {
 			for _, w := range e.words {
 				p := findWord(low, w)
 				if p < 0 {
 					continue
 				}
-				if best < 0 || p < best || (p == best && len(w) > bestLen) {
-					best, bestLen, set = p, len(w), e.emojis
+				if best < 0 || e.prio > bestPrio || (e.prio == bestPrio && (p < best || (p == best && len(w) > bestLen))) {
+					best, bestLen, bestPrio, set = p, len(w), e.prio, e.emojis
 				}
 			}
 		}
