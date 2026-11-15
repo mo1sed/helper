@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -86,19 +87,19 @@ func isWordRune(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '\'' || r == '’'
 }
 
-// findWord returns the byte position of the first whole-word match of w in s (both lower-case), or -1.
-func findWord(s, w string) int {
+// findWordSpan returns the byte span of the first whole-word match of w in s (both lower-case), or -1,-1.
+func findWordSpan(s, w string) (int, int) {
 	stem := strings.HasSuffix(w, "*")
 	w = strings.TrimSuffix(w, "*")
 	if w == "" {
-		return -1
+		return -1, -1
 	}
 	fr, _ := utf8.DecodeRuneInString(w)
 	lr, _ := utf8.DecodeLastRuneInString(w)
 	for from := 0; from < len(s); {
 		i := strings.Index(s[from:], w)
 		if i < 0 {
-			return -1
+			return -1, -1
 		}
 		i += from
 		okL := !isWordRune(fr) || i == 0
@@ -113,12 +114,23 @@ func findWord(s, w string) int {
 			okR = !isWordRune(nr)
 		}
 		if okL && okR {
-			return i
+			if stem { // swallow the rest of the word
+				for j < len(s) {
+					r, n := utf8.DecodeRuneInString(s[j:])
+					if !isWordRune(r) {
+						break
+					}
+					j += n
+				}
+			}
+			return i, j
 		}
 		from = i + 1
 	}
-	return -1
+	return -1, -1
 }
+
+func findWord(s, w string) int { i, _ := findWordSpan(s, w); return i }
 
 var emojiStopWords = []string{"school*", "student*", "classmate*", "class", "classes", "teen*", "minor", "minors", "underage", "years old", "year old",
 	"real life", "irl", "meet", "meeting", "address", "hotel", "kid", "kids", "child", "children", "grade*"}
@@ -210,7 +222,7 @@ func addEmoji(text, dictText string) (res string, added int, stopped bool) {
 		}
 		for ci, ch := range chunks {
 			isEnd := si == lastText && ci == len(chunks)-1
-			out, n := decorateChunk(ch, dict, used, &last, added < emojiMax, isEnd)
+			out, n := decorateChunk(ch, dict, used, &last, emojiMax-added, isEnd)
 			added += n
 			b.WriteString(out)
 		}
@@ -218,10 +230,16 @@ func addEmoji(text, dictText string) (res string, added int, stopped bool) {
 	return b.String(), added, false
 }
 
-func decorateChunk(ch string, dict []emojiEntry, used map[string]bool, last *string, room bool, isEnd bool) (string, int) {
-	if hasEmoji(ch) {
-		return ch, 0
-	}
+type emojiHit struct {
+	end  int
+	prio int
+	pos  int
+	set  []string
+}
+
+const emojiPerChunk = 3
+
+func decorateChunk(ch string, dict []emojiEntry, used map[string]bool, last *string, room int, isEnd bool) (string, int) {
 	body := strings.TrimRight(ch, " \t\r\n")
 	trail := ch[len(body):]
 	core := strings.TrimRight(body, ".!?")
@@ -229,35 +247,107 @@ func decorateChunk(ch string, dict []emojiEntry, used map[string]bool, last *str
 	if strings.TrimSpace(core) == "" || strings.IndexFunc(core, unicode.IsLetter) < 0 {
 		return ch, 0
 	}
-	var set []string
-	if room {
-		low := strings.ToLower(core)
-		best, bestLen, bestPrio := -1, 0, 0
-		for _, e := range dict {
-			for _, w := range e.words {
-				p := findWord(low, w)
-				if p < 0 {
-					continue
-				}
-				if best < 0 || e.prio > bestPrio || (e.prio == bestPrio && (p < best || (p == best && len(w) > bestLen))) {
-					best, bestLen, bestPrio, set = p, len(w), e.prio, e.emojis
-				}
-			}
-		}
-	}
-	if set == nil && isEnd && room {
-		set = endingSet(core, term)
-	}
-	if set == nil {
+	if hasEmoji(ch) { // the author already placed emoji here
 		return ch, 0
 	}
-	e := pickEmoji(set, used, *last)
-	*last = e
+	low := strings.ToLower(core)
+	if len(low) != len(core) {
+		low = core
+	}
+	var hits []emojiHit
+	if room > 0 {
+		for _, e := range dict {
+			bi, be := -1, -1
+			for _, w := range e.words {
+				i, j := findWordSpan(low, w)
+				if i >= 0 && (bi < 0 || i < bi) {
+					bi, be = i, j
+				}
+			}
+			if bi < 0 {
+				continue
+			}
+			// an emoji already follows this word: leave it alone
+			rest := strings.TrimLeft(core[be:], " ")
+			if r, _ := utf8.DecodeRuneInString(rest); rest != "" && isEmojiRune(r) {
+				continue
+			}
+			hits = append(hits, emojiHit{end: be, prio: e.prio, pos: bi, set: e.emojis})
+		}
+	}
+	// specific topics beat general words; without any topic the earliest general word is used once
+	top := 0
+	for _, h := range hits {
+		if h.prio > top {
+			top = h.prio
+		}
+	}
+	var pick []emojiHit
+	for _, h := range hits {
+		if h.prio == top {
+			pick = append(pick, h)
+		}
+	}
+	sort.Slice(pick, func(a, b int) bool { return pick[a].pos < pick[b].pos })
+	limit := emojiPerChunk
+	if top == 0 {
+		limit = 1
+	}
+	if limit > room {
+		limit = room
+	}
+	var chosen []emojiHit
+	for _, h := range pick {
+		if len(chosen) >= limit {
+			break
+		}
+		if len(chosen) > 0 && h.end <= chosen[len(chosen)-1].end+1 { // overlapping or touching
+			continue
+		}
+		chosen = append(chosen, h)
+	}
+	if len(chosen) == 0 {
+		if hasEmoji(ch) || !isEnd || room <= 0 {
+			return ch, 0
+		}
+		set := endingSet(core, term)
+		e := pickEmoji(set, used, *last)
+		*last = e
+		return withEnding(core, term, e) + trail, 1
+	}
+	if top == 0 { // a general word: the emoji closes the sentence instead of splitting it
+		e := pickEmoji(chosen[0].set, used, *last)
+		*last = e
+		return withEnding(core, term, e) + trail, 1
+	}
+	var out strings.Builder
+	prev := 0
+	n := 0
+	for k, h := range chosen {
+		e := pickEmoji(h.set, used, *last)
+		*last = e
+		n++
+		if h.end >= len(core) && k == len(chosen)-1 { // the word closes the sentence
+			out.WriteString(core[prev:])
+			prev = len(core)
+			return withEnding(out.String(), term, e) + trail, n
+		}
+		out.WriteString(core[prev:h.end])
+		out.WriteString(" " + e)
+		prev = h.end
+	}
+	out.WriteString(core[prev:])
+	out.WriteString(term)
+	return out.String() + trail, n
+}
+
+// withEnding puts the emoji after the sentence: a plain "." disappears, "?" and "!" stay in front of it.
+func withEnding(core, term, e string) string {
 	t := term
-	if strings.Trim(t, ".") == "" { // plain "." or "..." disappears, ? and ! stay
+	if strings.Trim(t, ".") == "" {
 		t = ""
 	}
-	return core + t + " " + e + trail, 1
+	return core + t + " " + e
 }
 
 func endingSet(core, term string) []string {
