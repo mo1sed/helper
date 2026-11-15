@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -191,6 +190,7 @@ func addEmoji(text, dictText string) (res string, added int, stopped bool) {
 	if pos < len(text) {
 		segs = append(segs, seg{text[pos:], false})
 	}
+	prevGot := false
 	lastText := -1
 	for i, sg := range segs {
 		if !sg.prot && strings.IndexFunc(sg.s, unicode.IsLetter) >= 0 {
@@ -222,7 +222,8 @@ func addEmoji(text, dictText string) (res string, added int, stopped bool) {
 		}
 		for ci, ch := range chunks {
 			isEnd := si == lastText && ci == len(chunks)-1
-			out, n := decorateChunk(ch, dict, used, &last, emojiMax-added, isEnd)
+			out, n := decorateChunk(ch, dict, used, &last, emojiMax-added, isEnd, prevGot)
+			prevGot = n > 0
 			added += n
 			b.WriteString(out)
 		}
@@ -237,108 +238,60 @@ type emojiHit struct {
 	set  []string
 }
 
-const emojiPerChunk = 3
-
-func decorateChunk(ch string, dict []emojiEntry, used map[string]bool, last *string, room int, isEnd bool) (string, int) {
+// decorateChunk puts at most one emoji at the end of a sentence, chosen by the sentence's topic.
+// It stays quiet on very short sentences and right after a sentence that already got one, so the
+// text reads like a person added the emoji by hand.
+func decorateChunk(ch string, dict []emojiEntry, used map[string]bool, last *string, room int, isEnd bool, prev bool) (string, int) {
 	body := strings.TrimRight(ch, " \t\r\n")
 	trail := ch[len(body):]
 	core := strings.TrimRight(body, ".!?")
 	term := body[len(core):]
-	if strings.TrimSpace(core) == "" || strings.IndexFunc(core, unicode.IsLetter) < 0 {
+	if strings.TrimSpace(core) == "" || strings.IndexFunc(core, unicode.IsLetter) < 0 || room <= 0 {
 		return ch, 0
 	}
 	if hasEmoji(ch) { // the author already placed emoji here
+		return ch, 0
+	}
+	words := len(strings.Fields(core))
+	if words < 3 || (prev && words < 8) {
 		return ch, 0
 	}
 	low := strings.ToLower(core)
 	if len(low) != len(core) {
 		low = core
 	}
-	var hits []emojiHit
-	if room > 0 {
-		for _, e := range dict {
-			bi, be := -1, -1
-			for _, w := range e.words {
-				i, j := findWordSpan(low, w)
-				if i >= 0 && (bi < 0 || i < bi) {
-					bi, be = i, j
-				}
+	var best *emojiHit
+	for _, e := range dict {
+		bi, be := -1, -1
+		for _, w := range e.words {
+			i, j := findWordSpan(low, w)
+			if i >= 0 && (bi < 0 || i < bi) {
+				bi, be = i, j
 			}
-			if bi < 0 {
-				continue
-			}
-			// an emoji already follows this word: leave it alone
-			rest := strings.TrimLeft(core[be:], " ")
-			if r, _ := utf8.DecodeRuneInString(rest); rest != "" && isEmojiRune(r) {
-				continue
-			}
-			hits = append(hits, emojiHit{end: be, prio: e.prio, pos: bi, set: e.emojis})
 		}
-	}
-	// specific topics beat general words; without any topic the earliest general word is used once
-	top := 0
-	for _, h := range hits {
-		if h.prio > top {
-			top = h.prio
-		}
-	}
-	var pick []emojiHit
-	for _, h := range hits {
-		if h.prio == top {
-			pick = append(pick, h)
-		}
-	}
-	sort.Slice(pick, func(a, b int) bool { return pick[a].pos < pick[b].pos })
-	limit := emojiPerChunk
-	if top == 0 {
-		limit = 1
-	}
-	if limit > room {
-		limit = room
-	}
-	var chosen []emojiHit
-	for _, h := range pick {
-		if len(chosen) >= limit {
-			break
-		}
-		if len(chosen) > 0 && h.end <= chosen[len(chosen)-1].end+1 { // overlapping or touching
+		if bi < 0 {
 			continue
 		}
-		chosen = append(chosen, h)
-	}
-	if len(chosen) == 0 {
-		if hasEmoji(ch) || !isEnd || room <= 0 {
-			return ch, 0
+		h := emojiHit{end: be, prio: e.prio, pos: bi, set: e.emojis}
+		// a specific topic beats a general word; among equals the later one (closer to the end) wins
+		if best == nil || h.prio > best.prio || (h.prio == best.prio && h.prio > 0 && h.pos > best.pos) ||
+			(h.prio == best.prio && h.prio == 0 && h.pos < best.pos) {
+			c := h
+			best = &c
 		}
-		set := endingSet(core, term)
-		e := pickEmoji(set, used, *last)
-		*last = e
-		return withEnding(core, term, e) + trail, 1
 	}
-	if top == 0 { // a general word: the emoji closes the sentence instead of splitting it
-		e := pickEmoji(chosen[0].set, used, *last)
-		*last = e
-		return withEnding(core, term, e) + trail, 1
+	var set []string
+	switch {
+	case best != nil && (best.prio > 0 || words >= 5):
+		set = best.set
+	case isEnd && words >= 4:
+		set = endingSet(core, term)
+	default:
+		return ch, 0
 	}
-	var out strings.Builder
-	prev := 0
-	n := 0
-	for k, h := range chosen {
-		e := pickEmoji(h.set, used, *last)
-		*last = e
-		n++
-		if h.end >= len(core) && k == len(chosen)-1 { // the word closes the sentence
-			out.WriteString(core[prev:])
-			prev = len(core)
-			return withEnding(out.String(), term, e) + trail, n
-		}
-		out.WriteString(core[prev:h.end])
-		out.WriteString(" " + e)
-		prev = h.end
-	}
-	out.WriteString(core[prev:])
-	out.WriteString(term)
-	return out.String() + trail, n
+	e := pickEmoji(set, used, *last)
+	*last = e
+	return withEnding(core, term, e) + trail, 1
 }
 
 // withEnding puts the emoji after the sentence: a plain "." disappears, "?" and "!" stay in front of it.
